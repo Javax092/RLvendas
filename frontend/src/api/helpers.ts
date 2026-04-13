@@ -1,0 +1,317 @@
+import { AxiosError } from "axios";
+import type {
+  BillingPlan,
+  BillingSnapshot,
+  Category,
+  Customer,
+  DashboardInsights,
+  FinanceSummary,
+  LoyaltySummary,
+  OnboardingStatus,
+  Order,
+  Product,
+  Promotion,
+  RestaurantAdminSettings
+} from "../types";
+
+type Envelope<T> = {
+  success?: boolean;
+  data?: T;
+};
+
+export type ApiClientError = Error & {
+  status?: number;
+  details?: unknown;
+};
+
+export function unwrapData<T>(payload: T | Envelope<T>): T {
+  if (payload && typeof payload === "object" && "data" in payload) {
+    return (payload as Envelope<T>).data as T;
+  }
+
+  return payload as T;
+}
+
+export function normalizeApiError(error: unknown): ApiClientError {
+  if (error instanceof AxiosError) {
+    const message =
+      (error.response?.data as { error?: { message?: string } | string } | undefined)?.error instanceof Object
+        ? ((error.response?.data as { error?: { message?: string } }).error?.message ?? error.message)
+        : typeof (error.response?.data as { error?: string } | undefined)?.error === "string"
+          ? (error.response?.data as { error?: string }).error ?? error.message
+          : error.message;
+
+    const normalized = new Error(message) as ApiClientError;
+    normalized.status = error.response?.status;
+    normalized.details = error.response?.data;
+    return normalized;
+  }
+
+  if (error instanceof Error) {
+    return error as ApiClientError;
+  }
+
+  return new Error("Erro inesperado na requisicao.") as ApiClientError;
+}
+
+function toNumber(value: unknown, fallback = 0) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function toStringValue(value: unknown, fallback = "") {
+  return typeof value === "string" ? value : fallback;
+}
+
+export function normalizeCategory(raw: any): Category {
+  return {
+    id: toStringValue(raw?.id),
+    name: toStringValue(raw?.name, "Sem categoria"),
+    slug: toStringValue(raw?.slug),
+    description: raw?.description ?? null,
+    sortOrder: toNumber(raw?.sortOrder),
+    isActive: Boolean(raw?.isActive ?? true)
+  };
+}
+
+export function normalizeProduct(raw: any): Product {
+  return {
+    id: toStringValue(raw?.id),
+    categoryId: toStringValue(raw?.categoryId),
+    name: toStringValue(raw?.name, "Produto sem nome"),
+    description: toStringValue(raw?.description, "Sem descricao cadastrada."),
+    imageUrl: raw?.imageUrl ?? null,
+    price: toNumber(raw?.price),
+    costPrice: raw?.costPrice == null ? null : toNumber(raw?.costPrice),
+    compareAtPrice: raw?.compareAtPrice == null ? null : toNumber(raw?.compareAtPrice),
+    stockQuantity: toNumber(raw?.stockQuantity, 0),
+    isActive: Boolean(raw?.isActive ?? true),
+    isFeatured: Boolean(raw?.isFeatured ?? false),
+    productType: raw?.productType ?? "SINGLE",
+    tags: Array.isArray(raw?.tags) ? raw.tags.map((tag: unknown) => String(tag)) : [],
+    category: raw?.category ? normalizeCategory(raw.category) : undefined
+  };
+}
+
+export function normalizeOrder(raw: any): Order {
+  const items = Array.isArray(raw?.items)
+    ? raw.items.map((item: any, index: number) => ({
+        id: toStringValue(item?.id, `${raw?.id ?? "order"}-${index}`),
+        quantity: toNumber(item?.quantity, 1),
+        totalPrice: toNumber(item?.totalPrice),
+        product: item?.product
+          ? normalizeProduct(item.product)
+          : {
+              id: toStringValue(item?.productId, `${index}`),
+              categoryId: "",
+              name: toStringValue(item?.name, "Item removido"),
+              description: "",
+              imageUrl: null,
+              price: toNumber(item?.unitPrice),
+              compareAtPrice: null,
+              isActive: true,
+              isFeatured: false,
+              productType: "SINGLE",
+              tags: []
+            }
+      }))
+    : [];
+
+  return {
+    id: toStringValue(raw?.id),
+    customerName: toStringValue(raw?.customerName, "Cliente nao identificado"),
+    customerPhone: raw?.customerPhone ?? null,
+    customerAddress: raw?.customerAddress ?? null,
+    paymentMethod: toStringValue(raw?.paymentMethod, "Nao informado"),
+    notes: raw?.notes ?? null,
+    subtotal: toNumber(raw?.subtotal),
+    deliveryFee: toNumber(raw?.deliveryFee),
+    total: toNumber(raw?.total),
+    whatsappMessage: toStringValue(raw?.whatsappMessage),
+    whatsappUrl: toStringValue(raw?.whatsappUrl),
+    status: toStringValue(raw?.status, "PENDING"),
+    createdAt: toStringValue(raw?.createdAt, new Date().toISOString()),
+    items
+  };
+}
+
+export function normalizeOnboarding(raw: any): OnboardingStatus {
+  const stepsSource = Array.isArray(raw?.steps)
+    ? raw.steps
+    : Array.isArray(raw?.checklist)
+      ? raw.checklist
+      : [];
+
+  const checklist: OnboardingStatus["checklist"] = stepsSource.map((item: any) => ({
+    id: toStringValue(item?.id || item?.key, "step"),
+    key: toStringValue(item?.key || item?.id, "step"),
+    label: toStringValue(item?.label, "Etapa"),
+    completed: Boolean(item?.completed ?? item?.done),
+    helper: toStringValue(item?.helper, item?.done ? "Concluido" : "Pendente")
+  }));
+
+  const completedCount = checklist.filter((item) => item.completed).length;
+  return {
+    completed: Boolean(raw?.completed ?? (checklist.length > 0 && completedCount === checklist.length)),
+    progress: toNumber(raw?.progress),
+    estimatedSetupMinutes: toNumber(raw?.estimatedSetupMinutes, completedCount >= 2 ? 5 : 12),
+    checklist
+  };
+}
+
+export function normalizeInsights(raw: any): DashboardInsights {
+  const summary = raw?.summary ?? {};
+  const charts = raw?.charts ?? {};
+  const topProducts = Array.isArray(raw?.topProducts) ? raw.topProducts : [];
+
+  return {
+    summary: {
+      totalOrders: {
+        day: toNumber(summary.totalOrders?.day),
+        week: toNumber(summary.totalOrders?.week),
+        month: toNumber(summary.totalOrders?.month)
+      },
+      totalRevenue: toNumber(summary.totalRevenue),
+      monthlyRevenue: toNumber(summary.monthlyRevenue),
+      averageTicket: toNumber(summary.averageTicket),
+      conversionRate: toNumber(summary.conversionRate),
+      savedFees: toNumber(summary.savedFees)
+    },
+    charts: {
+      ordersByDay: Array.isArray(charts.ordersByDay)
+        ? charts.ordersByDay.map((item: any) => ({
+            date: toStringValue(item?.date),
+            orders: toNumber(item?.orders)
+          }))
+        : [],
+      peakHours: Array.isArray(charts.peakHours)
+        ? charts.peakHours.map((item: any) => ({
+            hour: toStringValue(item?.hour),
+            orders: toNumber(item?.orders)
+          }))
+        : []
+    },
+    topProducts: topProducts.map((item: any, index: number) => ({
+      id: toStringValue(item?.id, String(index + 1)),
+      name: toStringValue(item?.name, "Produto"),
+      quantity: toNumber(item?.quantity ?? item?.sales),
+      revenue: toNumber(item?.revenue)
+    })),
+    topProfitableProducts: Array.isArray(raw?.topProfitableProducts)
+      ? raw.topProfitableProducts.map((item: any) => ({
+          name: toStringValue(item?.name, "Produto"),
+          estimatedProfit: toNumber(item?.estimatedProfit)
+        }))
+      : [],
+    fallbackUsed: Boolean(raw?.fallbackUsed)
+  };
+}
+
+export function normalizeSettings(raw: any): RestaurantAdminSettings {
+  return {
+    restaurant: {
+      name: toStringValue(raw?.restaurant?.name, "RL Burger"),
+      slug: toStringValue(raw?.restaurant?.slug, "rlburger"),
+      phone: toStringValue(raw?.restaurant?.phone, "5592999999999"),
+      currency: toStringValue(raw?.restaurant?.currency, "BRL"),
+      timezone: toStringValue(raw?.restaurant?.timezone, "America/Manaus"),
+      deliveryFee: toNumber(raw?.restaurant?.deliveryFee),
+      businessHours: toStringValue(raw?.restaurant?.businessHours, "Seg-Dom 11:00 as 23:00")
+    },
+    notifications: {
+      email: Boolean(raw?.notifications?.email ?? true),
+      whatsapp: Boolean(raw?.notifications?.whatsapp ?? true)
+    },
+    preferences: {
+      autoAcceptOrders: Boolean(raw?.preferences?.autoAcceptOrders ?? false),
+      showOutOfStock: Boolean(raw?.preferences?.showOutOfStock ?? false)
+    },
+    branding: {
+      primaryColor: toStringValue(raw?.branding?.primaryColor, "#f97316"),
+      secondaryColor: toStringValue(raw?.branding?.secondaryColor, "#111827"),
+      logoUrl: toStringValue(raw?.branding?.logoUrl),
+      bannerUrl: toStringValue(raw?.branding?.bannerUrl),
+      heroTitle: toStringValue(raw?.branding?.heroTitle, "Seu restaurante"),
+      heroSubtitle: toStringValue(raw?.branding?.heroSubtitle, "Seu cardapio com identidade propria"),
+      seoTitle: toStringValue(raw?.branding?.seoTitle),
+      seoDescription: toStringValue(raw?.branding?.seoDescription)
+    }
+  };
+}
+
+export function normalizeBillingSnapshot(raw: any): BillingSnapshot {
+  const currentPlan = raw?.currentPlan ?? {};
+  const availablePlans = Array.isArray(raw?.availablePlans) ? raw.availablePlans : [];
+
+  return {
+    currentPlan: {
+      name: toStringValue(currentPlan?.name, "Pro"),
+      price: toNumber(currentPlan?.price, 99.9),
+      status: toStringValue(currentPlan?.status, "active")
+    },
+    availablePlans: availablePlans.map((plan: any): BillingPlan => ({
+      id: toStringValue(plan?.id),
+      name: toStringValue(plan?.name, "Plano"),
+      price: toNumber(plan?.price ?? plan?.priceMonthly),
+      currency: toStringValue(plan?.currency, "BRL"),
+      features: Array.isArray(plan?.features) ? plan.features.map((feature: unknown) => String(feature)) : []
+    }))
+  };
+}
+
+export function normalizeFinanceSummary(raw: any): FinanceSummary {
+  return {
+    revenue: toNumber(raw?.revenue),
+    estimatedProfit: toNumber(raw?.estimatedProfit),
+    averageTicket: toNumber(raw?.averageTicket),
+    totalOrders: toNumber(raw?.totalOrders)
+  };
+}
+
+export function normalizeCustomer(raw: any): Customer {
+  return {
+    id: toStringValue(raw?.id),
+    name: toStringValue(raw?.name, "Cliente"),
+    phone: raw?.phone ?? null,
+    totalOrders: toNumber(raw?.totalOrders),
+    totalSpent: toNumber(raw?.totalSpent),
+    lastOrderDate: raw?.lastOrderDate ?? null,
+    averageTicket: toNumber(raw?.averageTicket),
+    frequencyDays: raw?.frequencyDays == null ? null : toNumber(raw?.frequencyDays),
+    isVip: Boolean(raw?.isVip),
+    segment: raw?.segment ?? "novo",
+    recentOrders: Array.isArray(raw?.recentOrders)
+      ? raw.recentOrders.map((order: any) => ({
+          id: toStringValue(order?.id),
+          total: toNumber(order?.total),
+          createdAt: toStringValue(order?.createdAt),
+          status: toStringValue(order?.status)
+        }))
+      : []
+  };
+}
+
+export function normalizeLoyalty(raw: any): LoyaltySummary {
+  return {
+    customerId: toStringValue(raw?.customerId),
+    customerName: toStringValue(raw?.customerName),
+    points: toNumber(raw?.points),
+    nextRewardAt: toNumber(raw?.nextRewardAt),
+    progress: toNumber(raw?.progress),
+    rewards: Array.isArray(raw?.rewards) ? raw.rewards.map((reward: unknown) => String(reward)) : []
+  };
+}
+
+export function normalizePromotion(raw: any): Promotion {
+  return {
+    id: toStringValue(raw?.id),
+    title: toStringValue(raw?.title, "Promocao"),
+    type: toStringValue(raw?.type, "discount"),
+    value: toNumber(raw?.value),
+    active: Boolean(raw?.active ?? true),
+    description: raw?.description ?? null,
+    productId: raw?.productId ?? null,
+    productName: raw?.productName ?? null,
+    originalPrice: raw?.originalPrice == null ? undefined : toNumber(raw?.originalPrice)
+  };
+}

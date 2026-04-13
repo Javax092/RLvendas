@@ -1,0 +1,18 @@
+{
+  "name": "RL Burger SaaS",
+  "short_name": "RL Burger",
+  "start_url": "/rlburger",
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#111827",
+  "description": "Cardapio digital com pedido via WhatsApp para restaurantes.",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
+
