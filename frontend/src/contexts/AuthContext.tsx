@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { createContext, useEffect, useMemo, useState } from "react";
 import { fetchMe, loginRequest } from "../api/auth";
+import { normalizeApiError } from "../api/helpers";
 import { setAuthToken } from "../api/client";
 import type { LoginResponse } from "../types";
 
@@ -33,10 +34,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    const parsed = JSON.parse(raw) as LoginResponse & { token: string };
-    setToken(parsed.token);
-    setSession(parsed);
-    setAuthToken(parsed.token);
+    try {
+      const parsed = JSON.parse(raw) as LoginResponse & { token: string };
+      if (!parsed?.token) {
+        throw new Error("Sessao invalida.");
+      }
+
+      setToken(parsed.token);
+      setSession(parsed);
+      setAuthToken(parsed.token);
+    } catch {
+      window.localStorage.removeItem(storageKey);
+      setAuthToken(undefined);
+      setLoading(false);
+      return;
+    }
 
     fetchMe()
       .then((me) => {
@@ -65,7 +77,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   async function signIn(email: string, password: string) {
-    const data = await loginRequest(email, password);
+    const data = await loginRequest(email, password).catch((error) => {
+      throw normalizeApiError(error);
+    });
     setToken(data.token);
     setSession(data);
     setAuthToken(data.token);

@@ -34,6 +34,12 @@ export function unwrapData<T>(payload: T | Envelope<T>): T {
 
 export function normalizeApiError(error: unknown): ApiClientError {
   if (error instanceof AxiosError) {
+    if (!error.response) {
+      const normalized = new Error("Nao foi possivel conectar ao servidor.") as ApiClientError;
+      normalized.details = error.toJSON();
+      return normalized;
+    }
+
     const message =
       (error.response?.data as { error?: { message?: string } | string } | undefined)?.error instanceof Object
         ? ((error.response?.data as { error?: { message?: string } }).error?.message ?? error.message)

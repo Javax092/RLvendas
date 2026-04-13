@@ -17,7 +17,7 @@ export function PublicMenuPage() {
   const { restaurantSlug = "rlburger" } = useParams();
   const [mobileCartOpen, setMobileCartOpen] = useState(false);
   const { addItem, count, total } = useCart();
-  const { restaurant, loading, activeCategory, setActiveCategory, activeProducts, featuredProducts } =
+  const { restaurant, loading, error, activeCategory, setActiveCategory, activeProducts, featuredProducts } =
     useMenuData(restaurantSlug);
 
   useEffect(() => {
@@ -145,6 +145,12 @@ export function PublicMenuPage() {
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 {loading
                   ? Array.from({ length: 6 }).map((_, index) => <SkeletonCard key={index} />)
+                  : error
+                    ? (
+                        <div className="col-span-full rounded-[24px] border border-red-400/20 bg-red-500/10 p-5 text-sm text-red-100">
+                          {error}
+                        </div>
+                      )
                   : activeProducts.map((product) => (
                       <ProductCard key={product.id} product={product} onAdd={handleAddProduct} />
                     ))}

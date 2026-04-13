@@ -2,6 +2,7 @@ import type { FormEvent } from "react";
 import { LockKeyhole, Mail, Sandwich } from "lucide-react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { normalizeApiError } from "../../api/helpers";
 import { Button } from "../../components/Button";
 import { Input } from "../../components/Input";
 import { useAuth } from "../../hooks/useAuth";
@@ -20,8 +21,8 @@ export function LoginPage() {
     try {
       await signIn(email, password);
       navigate("/admin");
-    } catch {
-      setError("Falha no login");
+    } catch (error) {
+      setError(normalizeApiError(error).message || "Falha no login");
     }
   }
 

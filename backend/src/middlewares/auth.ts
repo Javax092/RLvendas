@@ -55,7 +55,11 @@ export async function ensureAuth(request: Request, _response: Response, next: Ne
 
     request.user = user;
     return next();
-  } catch {
-    return next(new ApiError(401, "Token invalido."));
+  } catch (error) {
+    if (error instanceof jwt.JsonWebTokenError) {
+      return next(new ApiError(401, "Token invalido."));
+    }
+
+    return next(error);
   }
 }

@@ -9,4 +9,6 @@ coverage
 backend/uploads
 backend/generated
 frontend/.vite
+frontend/.vercel
+backend/.vercel
 *.log

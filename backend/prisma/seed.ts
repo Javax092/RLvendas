@@ -1,7 +1,22 @@
+import dotenv from "dotenv";
 import bcrypt from "bcryptjs";
 import { OrderStatus, PlanType, PrismaClient, ProductType } from "@prisma/client";
 
-const prisma = new PrismaClient();
+dotenv.config();
+
+const databaseUrl = process.env.DIRECT_URL?.trim() || process.env.DATABASE_URL?.trim();
+
+if (!databaseUrl) {
+  throw new Error("[seed] DATABASE_URL or DIRECT_URL must be set.");
+}
+
+const prisma = new PrismaClient({
+  datasources: {
+    db: {
+      url: databaseUrl
+    }
+  }
+});
 
 function decimal(value: number) {
   return value.toFixed(2);

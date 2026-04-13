@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Request } from "express";
 import fs from "node:fs";
 import path from "node:path";
 import multer from "multer";
@@ -12,8 +12,17 @@ if (!fs.existsSync(uploadDir)) {
 }
 
 const storage = multer.diskStorage({
-  destination: (_request, _file, callback) => callback(null, uploadDir),
-  filename: (_request, file, callback) => {
+  destination: (
+    _request: Request,
+    _file: Express.Multer.File,
+    callback: (error: Error | null, destination: string) => void
+  ) =>
+    callback(null, uploadDir),
+  filename: (
+    _request: Request,
+    file: Express.Multer.File,
+    callback: (error: Error | null, filename: string) => void
+  ) => {
     const timestamp = Date.now();
     const safeName = file.originalname.replace(/\s+/g, "-").toLowerCase();
     callback(null, `${timestamp}-${safeName}`);
@@ -25,4 +34,3 @@ const upload = multer({ storage });
 export const uploadRoutes = Router();
 
 uploadRoutes.post("/image", ensureAuth, upload.single("file"), uploadImage);
-

@@ -29,6 +29,38 @@ export function errorHandler(error: unknown, _request: Request, response: Respon
         }
       });
     }
+
+    if (error.code === "P2025") {
+      return response.status(404).json({
+        error: {
+          message: "Registro nao encontrado."
+        }
+      });
+    }
+  }
+
+  if (error instanceof Prisma.PrismaClientInitializationError) {
+    const message = error.message.includes("Can't reach database server")
+      ? "Banco de dados indisponivel. Verifique DATABASE_URL e DIRECT_URL."
+      : "Falha ao inicializar a conexao com o banco de dados.";
+
+    console.error(`[db:init] ${error.message}`);
+
+    return response.status(503).json({
+      error: {
+        message
+      }
+    });
+  }
+
+  if (error instanceof Prisma.PrismaClientRustPanicError) {
+    console.error(`[db:panic] ${error.message}`);
+
+    return response.status(503).json({
+      error: {
+        message: "O cliente do banco de dados falhou durante a execucao."
+      }
+    });
   }
 
   if (error instanceof Error) {

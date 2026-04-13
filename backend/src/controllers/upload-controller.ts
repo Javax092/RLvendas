@@ -4,7 +4,7 @@ import path from "node:path";
 export function uploadImage(request: Request, response: Response) {
   const file = request.file;
 
-  if (!file) {
+  if (!file?.path) {
     return response.status(400).json({ message: "Arquivo nao enviado" });
   }
 
@@ -12,4 +12,3 @@ export function uploadImage(request: Request, response: Response) {
     url: `/uploads/${path.basename(file.path)}`
   });
 }
-
