@@ -3,6 +3,7 @@ import type {
   BillingPlan,
   BillingSnapshot,
   Category,
+  CartItem,
   Customer,
   DashboardInsights,
   FinanceSummary,
@@ -11,6 +12,9 @@ import type {
   Order,
   Product,
   Promotion,
+  PublicMenuResponse,
+  Restaurant,
+  RestaurantSettings,
   RestaurantAdminSettings
 } from "../types";
 
@@ -125,6 +129,82 @@ export function normalizeProduct(raw: any): Product {
     tags: Array.isArray(raw?.tags) ? raw.tags.map((tag: unknown) => String(tag)) : [],
     category: raw?.category ? normalizeCategory(raw.category) : undefined
   };
+}
+
+export function normalizeRestaurantSettings(raw: any): RestaurantSettings {
+  return {
+    heroTitle: toStringValue(raw?.heroTitle, "Seu burger favorito sem taxa de marketplace"),
+    heroSubtitle: toStringValue(
+      raw?.heroSubtitle,
+      "Monte seu pedido, receba sugestoes inteligentes e finalize pelo WhatsApp.",
+    ),
+    seoTitle: raw?.seoTitle ?? null,
+    seoDescription: raw?.seoDescription ?? null,
+    deliveryFee: toNumber(raw?.deliveryFee),
+    minimumOrderAmount: toNumber(raw?.minimumOrderAmount),
+    estimatedTimeMin: toNumber(raw?.estimatedTimeMin, 30),
+    estimatedTimeMax: toNumber(raw?.estimatedTimeMax, 45),
+    bannerUrl: raw?.bannerUrl ?? null
+  };
+}
+
+export function normalizePublicMenuResponse(raw: any): PublicMenuResponse {
+  const categories = Array.isArray(raw?.categories) ? raw.categories : [];
+
+  return {
+    id: toStringValue(raw?.id),
+    name: toStringValue(raw?.name, "Restaurante"),
+    slug: toStringValue(raw?.slug),
+    description: raw?.description ?? null,
+    logoUrl: raw?.logoUrl ?? null,
+    primaryColor: toStringValue(raw?.primaryColor, "#F97316"),
+    secondaryColor: toStringValue(raw?.secondaryColor, "#111827"),
+    whatsappNumber: toStringValue(raw?.whatsappNumber),
+    plan: raw?.plan ?? "BASIC",
+    isAiUpsellOn: Boolean(raw?.isAiUpsellOn ?? false),
+    settings: raw?.settings ? normalizeRestaurantSettings(raw.settings) : null,
+    categories: categories.map((category: any) => ({
+      ...normalizeCategory(category),
+      products: Array.isArray(category?.products)
+        ? category.products.map((product: any) =>
+            normalizeProduct({
+              ...product,
+              categoryId: product?.categoryId ?? category?.id,
+              category: category ? normalizeCategory(category) : undefined
+            })
+          )
+        : []
+    }))
+  };
+}
+
+export function normalizeCartItems(raw: unknown): CartItem[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+
+  const items: CartItem[] = [];
+
+  for (const item of raw as any[]) {
+    if (!item?.product) {
+      continue;
+    }
+
+    const normalizedItem: CartItem = {
+      product: normalizeProduct(item.product),
+      quantity: toNumber(item.quantity, 1),
+    };
+
+    if (typeof item.notes === "string") {
+      normalizedItem.notes = item.notes;
+    }
+
+    if (normalizedItem.quantity > 0) {
+      items.push(normalizedItem);
+    }
+  }
+
+  return items;
 }
 
 export function normalizeOrder(raw: any): Order {
@@ -244,8 +324,8 @@ export function normalizeInsights(raw: any): DashboardInsights {
 export function normalizeSettings(raw: any): RestaurantAdminSettings {
   return {
     restaurant: {
-      name: toStringValue(raw?.restaurant?.name, "RL Burger"),
-      slug: toStringValue(raw?.restaurant?.slug, "rlburger"),
+      name: toStringValue(raw?.restaurant?.name, "Don Burguer"),
+      slug: toStringValue(raw?.restaurant?.slug, "don-burguer"),
       phone: toStringValue(raw?.restaurant?.phone, "5592999999999"),
       currency: toStringValue(raw?.restaurant?.currency, "BRL"),
       timezone: toStringValue(raw?.restaurant?.timezone, "America/Manaus"),
