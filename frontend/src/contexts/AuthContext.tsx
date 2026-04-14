@@ -3,7 +3,27 @@ import { createContext, useEffect, useMemo, useState } from "react";
 import { fetchMe, loginRequest } from "../api/auth";
 import { normalizeApiError } from "../api/helpers";
 import { setAuthToken } from "../api/client";
-import type { LoginResponse } from "../types";
+
+type RestaurantSession = {
+  id?: string;
+  slug: string;
+  name: string;
+  plan?: string;
+};
+
+type AuthUser = {
+  id: string;
+  name?: string;
+  email: string;
+  role?: string;
+  restaurant?: RestaurantSession;
+};
+
+type LoginResponse = {
+  token: string;
+  user?: AuthUser;
+  restaurant?: RestaurantSession;
+};
 
 type AuthContextValue = {
   token?: string;
@@ -16,7 +36,7 @@ type AuthContextValue = {
 export const AuthContext = createContext<AuthContextValue>({
   loading: true,
   signIn: async () => undefined,
-  signOut: () => undefined
+  signOut: () => undefined,
 });
 
 const storageKey = "rlburger:session";
@@ -36,6 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     try {
       const parsed = JSON.parse(raw) as LoginResponse & { token: string };
+
       if (!parsed?.token) {
         throw new Error("Sessao invalida.");
       }
@@ -51,7 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     fetchMe()
-      .then((me) => {
+      .then((me: AuthUser) => {
         setSession((current) =>
           current
             ? {
@@ -60,11 +81,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                   id: me.id,
                   name: me.name,
                   email: me.email,
-                  role: me.role
+                  role: me.role,
+                  restaurant: me.restaurant,
                 },
-                restaurant: me.restaurant
+                restaurant: me.restaurant ?? current.restaurant,
               }
-            : current
+            : current,
         );
       })
       .catch(() => {
@@ -77,9 +99,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   async function signIn(email: string, password: string) {
-    const data = await loginRequest(email, password).catch((error) => {
+    const data = await loginRequest(email, password).catch((error: unknown) => {
       throw normalizeApiError(error);
     });
+
     setToken(data.token);
     setSession(data);
     setAuthToken(data.token);
@@ -99,9 +122,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       session,
       loading,
       signIn,
-      signOut
+      signOut,
     }),
-    [token, session, loading]
+    [token, session, loading],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

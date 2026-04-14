@@ -6,14 +6,21 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
   const { loading, token, session } = useAuth();
 
   if (loading) {
-    return <div className="flex min-h-screen items-center justify-center text-white">Carregando...</div>;
+    return (
+      <div className="flex min-h-screen items-center justify-center text-white">
+        Carregando...
+      </div>
+    );
   }
 
   if (!token) {
     return <Navigate to="/admin/login" replace />;
   }
 
-  if (session?.user.role && !["owner", "admin", "manager"].includes(session.user.role)) {
+  if (
+    session?.user?.role &&
+    !["owner", "admin", "manager"].includes(session.user.role)
+  ) {
     return <Navigate to="/admin/login" replace />;
   }
 

@@ -13,18 +13,6 @@ function normalizeApiBaseUrl(rawBaseUrl?: string) {
     .trim()
     .replace(/\/+$/, "");
 
-  if (isProduction) {
-    const url = new URL(
-      resolvedBaseUrl.endsWith("/api")
-        ? resolvedBaseUrl
-        : `${resolvedBaseUrl}/api`,
-    );
-
-    if (["localhost", "127.0.0.1", "::1"].includes(url.hostname)) {
-      throw new Error("VITE_API_URL cannot point to localhost in production.");
-    }
-  }
-
   if (resolvedBaseUrl.endsWith("/api")) {
     return resolvedBaseUrl;
   }
@@ -35,8 +23,10 @@ function normalizeApiBaseUrl(rawBaseUrl?: string) {
 const baseURL = normalizeApiBaseUrl(import.meta.env.VITE_API_URL);
 
 export const api = axios.create({
-  baseURL: "${import.meta.env.VITE_API_URL}/api",
-  withCredentials: true,
+  baseURL,
+  headers: {
+    "Content-Type": "application/json",
+  },
 });
 
 api.interceptors.response.use(
@@ -47,8 +37,7 @@ api.interceptors.response.use(
 export function setAuthToken(token?: string) {
   if (token) {
     api.defaults.headers.common.Authorization = `Bearer ${token}`;
-    return;
+  } else {
+    delete api.defaults.headers.common.Authorization;
   }
-
-  delete api.defaults.headers.common.Authorization;
 }

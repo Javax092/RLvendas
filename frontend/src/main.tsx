@@ -7,6 +7,7 @@ import { AuthProvider } from "./contexts/AuthContext";
 import { CartProvider } from "./contexts/CartContext";
 import { ToastProvider } from "./contexts/ToastContext";
 import { ToastViewport } from "./components/ToastViewport";
+import { restoreAuth } from "./api/auth";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
@@ -20,7 +21,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         </ToastProvider>
       </AuthProvider>
     </BrowserRouter>
-  </React.StrictMode>
+  </React.StrictMode>,
 );
 
 if ("serviceWorker" in navigator) {
