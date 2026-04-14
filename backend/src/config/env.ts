@@ -3,99 +3,214 @@ import { z } from "zod";
 
 dotenv.config();
 
-const envSchema = z.object({
-  NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
-  PORT: z.coerce.number().default(3333),
-  FRONTEND_URL: z.string().trim().url().optional(),
-  CORS_ORIGINS: z.string().trim().optional(),
-  DATABASE_URL: z.string().trim().min(1),
-  DIRECT_URL: z.string().trim().min(1).optional(),
-  JWT_SECRET: z.string().min(10)
-});
+const NODE_ENV_VALUES = ["development", "test", "production"] as const;
 
-function parseUrl(name: string, value: string) {
-  try {
-    return new URL(value);
-  } catch {
-    throw new Error(`[env] ${name} must be a valid URL.`);
-  }
+function normalizeOrigin(value: string) {
+  return value.trim().replace(/\/+$/, "").toLowerCase();
+}
+
+function formatEnvIssues(issues: string[]) {
+  return `[env] Invalid environment configuration:\n${issues.map((issue) => `- ${issue}`).join("\n")}`;
+}
+
+function failEnv(issues: string[]): never {
+  throw new Error(formatEnvIssues(issues));
 }
 
 function isLocalHostname(hostname: string) {
   return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
 }
 
-const parsedEnv = envSchema.parse({
+function parseNodeEnv(rawValue: string | undefined) {
+  const value = rawValue?.trim() || "development";
+
+  if (NODE_ENV_VALUES.includes(value as (typeof NODE_ENV_VALUES)[number])) {
+    return value as (typeof NODE_ENV_VALUES)[number];
+  }
+
+  failEnv([
+    `NODE_ENV must be one of: ${NODE_ENV_VALUES.join(", ")}. Received "${rawValue ?? ""}".`,
+  ]);
+}
+
+function parsePort(rawValue: string | undefined) {
+  if (!rawValue?.trim()) {
+    return 3333;
+  }
+
+  const value = Number(rawValue);
+
+  if (Number.isInteger(value) && value >= 1 && value <= 65535) {
+    return value;
+  }
+
+  failEnv([`PORT must be an integer between 1 and 65535. Received "${rawValue}".`]);
+}
+
+function parseRequiredString(name: string, rawValue: string | undefined) {
+  const value = rawValue?.trim();
+
+  if (!value) {
+    failEnv([`${name} is required and cannot be empty.`]);
+  }
+
+  return value;
+}
+
+function ensureSupportedUrl(name: string, url: URL) {
+  if (!["http:", "https:", "postgres:", "postgresql:", "prisma:"].includes(url.protocol)) {
+    failEnv([`${name} uses unsupported protocol "${url.protocol}".`]);
+  }
+}
+
+function parseUrl(name: string, rawValue: string | undefined) {
+  const value = parseRequiredString(name, rawValue);
+  let url: URL;
+
+  try {
+    url = new URL(value);
+  } catch {
+    failEnv([`${name} must be a valid URL. Received "${rawValue ?? ""}".`]);
+  }
+
+  ensureSupportedUrl(name, url);
+  return url;
+}
+
+function parseOptionalOrigin(name: string, rawValue: string | undefined) {
+  const value = rawValue?.trim();
+
+  if (!value) {
+    return undefined;
+  }
+
+  let url: URL;
+
+  try {
+    url = new URL(value);
+  } catch {
+    failEnv([`${name} must be a valid origin URL. Received "${rawValue ?? ""}".`]);
+  }
+
+  if (!["http:", "https:"].includes(url.protocol)) {
+    failEnv([`${name} must use http or https. Received "${value}".`]);
+  }
+
+  if (url.pathname !== "/" || url.search || url.hash || url.username || url.password) {
+    failEnv([`${name} must contain only the site origin, without path, query, hash, or credentials. Received "${value}".`]);
+  }
+
+  return normalizeOrigin(url.origin);
+}
+
+function parseCorsOrigins(rawValue: string | undefined) {
+  if (!rawValue?.trim()) {
+    return [];
+  }
+
+  const issues: string[] = [];
+  const normalizedOrigins = rawValue
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean)
+    .flatMap((origin) => {
+      let url: URL;
+
+      try {
+        url = new URL(origin);
+      } catch {
+        issues.push(`CORS_ORIGINS entry "${origin}" is not a valid URL.`);
+        return [];
+      }
+
+      if (!["http:", "https:"].includes(url.protocol)) {
+        issues.push(`CORS_ORIGINS entry "${origin}" must use http or https.`);
+        return [];
+      }
+
+      if (url.pathname !== "/" || url.search || url.hash || url.username || url.password) {
+        issues.push(`CORS_ORIGINS entry "${origin}" must be only an origin, without path, query, hash, or credentials.`);
+        return [];
+      }
+
+      return [normalizeOrigin(url.origin)];
+    });
+
+  if (issues.length > 0) {
+    failEnv(issues);
+  }
+
+  return Array.from(new Set(normalizedOrigins));
+}
+
+const rawEnv = {
   NODE_ENV: process.env.NODE_ENV,
   PORT: process.env.PORT,
   FRONTEND_URL: process.env.FRONTEND_URL ?? process.env.APP_URL,
   CORS_ORIGINS: process.env.CORS_ORIGINS,
   DATABASE_URL: process.env.DATABASE_URL,
   DIRECT_URL: process.env.DIRECT_URL ?? process.env.DATABASE_URL,
-  JWT_SECRET: process.env.AUTH_JWT_SECRET ?? process.env.JWT_SECRET
-});
+  JWT_SECRET: process.env.AUTH_JWT_SECRET ?? process.env.JWT_SECRET,
+};
 
-const databaseUrl = parseUrl("DATABASE_URL", parsedEnv.DATABASE_URL);
-const directUrl = parsedEnv.DIRECT_URL ? parseUrl("DIRECT_URL", parsedEnv.DIRECT_URL) : undefined;
-const appUrl = parsedEnv.FRONTEND_URL ? parseUrl("FRONTEND_URL", parsedEnv.FRONTEND_URL) : undefined;
+const jwtSecretSchema = z.string().min(10, "JWT_SECRET must have at least 10 characters.");
+const jwtSecretResult = jwtSecretSchema.safeParse(rawEnv.JWT_SECRET?.trim() ?? "");
 
-function normalizeOrigin(value: string) {
-  return value.trim().replace(/\/+$/, "");
+if (!jwtSecretResult.success) {
+  failEnv(jwtSecretResult.error.issues.map((issue) => issue.message));
 }
 
-function parseOrigins(value?: string) {
-  if (!value) {
-    return [];
-  }
+const NODE_ENV = parseNodeEnv(rawEnv.NODE_ENV);
+const PORT = parsePort(rawEnv.PORT);
+const DATABASE_URL = parseUrl("DATABASE_URL", rawEnv.DATABASE_URL).toString();
+const DIRECT_URL = parseUrl("DIRECT_URL", rawEnv.DIRECT_URL).toString();
+const FRONTEND_URL = parseOptionalOrigin("FRONTEND_URL", rawEnv.FRONTEND_URL);
+const configuredCorsOrigins = parseCorsOrigins(rawEnv.CORS_ORIGINS);
 
-  return value
-    .split(",")
-    .map((origin) => origin.trim())
-    .filter(Boolean)
-    .map((origin) => parseUrl("CORS_ORIGINS", origin).toString())
-    .map(normalizeOrigin);
-}
+const databaseUrl = new URL(DATABASE_URL);
+const directUrl = new URL(DIRECT_URL);
 
-if (parsedEnv.NODE_ENV === "production") {
-  if (appUrl && isLocalHostname(appUrl.hostname)) {
-    throw new Error("[env] FRONTEND_URL cannot point to localhost in production.");
+if (NODE_ENV === "production") {
+  const issues: string[] = [];
+
+  if (FRONTEND_URL) {
+    const frontendUrl = new URL(FRONTEND_URL);
+
+    if (isLocalHostname(frontendUrl.hostname)) {
+      issues.push("FRONTEND_URL cannot point to localhost or 127.0.0.1 in production.");
+    }
   }
 
   if (isLocalHostname(databaseUrl.hostname)) {
-    throw new Error("[env] DATABASE_URL cannot point to localhost in production.");
+    issues.push("DATABASE_URL cannot point to localhost or 127.0.0.1 in production.");
   }
 
-  if (directUrl && isLocalHostname(directUrl.hostname)) {
-    throw new Error("[env] DIRECT_URL cannot point to localhost in production.");
+  if (isLocalHostname(directUrl.hostname)) {
+    issues.push("DIRECT_URL cannot point to localhost or 127.0.0.1 in production.");
+  }
+
+  if (issues.length > 0) {
+    failEnv(issues);
   }
 }
 
-export const env = {
-  ...parsedEnv,
-  FRONTEND_URL: appUrl?.toString(),
-  DATABASE_URL: databaseUrl.toString(),
-  DIRECT_URL: directUrl?.toString()
-};
-
 const localDevOrigins = [
-  "http://localhost:3000",
-  "http://localhost:4173",
   "http://localhost:5173",
-  "http://127.0.0.1:3000",
+  "http://127.0.0.1:5173",
+  "http://localhost:4173",
   "http://127.0.0.1:4173",
-  "http://127.0.0.1:5173"
 ];
 
 export const allowedAppOrigins = Array.from(
   new Set([
-    ...localDevOrigins,
-    ...(appUrl ? [normalizeOrigin(appUrl.toString())] : []),
-    ...parseOrigins(parsedEnv.CORS_ORIGINS)
-  ])
+    ...localDevOrigins.map(normalizeOrigin),
+    ...(FRONTEND_URL ? [FRONTEND_URL] : []),
+    ...configuredCorsOrigins,
+  ]),
 );
 
 const allowedOriginHosts = allowedAppOrigins
-  .map((origin) => parseUrl("allowed origin", origin).hostname)
+  .map((origin) => new URL(origin).hostname)
   .filter(Boolean);
 
 const vercelPreviewPrefixes = Array.from(
@@ -103,8 +218,8 @@ const vercelPreviewPrefixes = Array.from(
     allowedOriginHosts
       .filter((host) => host.endsWith(".vercel.app"))
       .map((host) => host.split(".")[0])
-      .filter(Boolean)
-  )
+      .filter(Boolean),
+  ),
 );
 
 export function isAllowedOrigin(origin?: string | null) {
@@ -119,21 +234,32 @@ export function isAllowedOrigin(origin?: string | null) {
   }
 
   try {
-    const { hostname, protocol } = new URL(normalizedOrigin);
+    const parsed = new URL(normalizedOrigin);
 
-    if (!hostname.endsWith(".vercel.app") || protocol !== "https:") {
+    if (parsed.protocol !== "https:" || !parsed.hostname.endsWith(".vercel.app")) {
       return false;
     }
 
     return vercelPreviewPrefixes.some(
-      (prefix) => hostname === `${prefix}.vercel.app` || hostname.startsWith(`${prefix}-`)
+      (prefix) =>
+        parsed.hostname === `${prefix}.vercel.app` || parsed.hostname.startsWith(`${prefix}-`),
     );
   } catch {
     return false;
   }
 }
 
+export const env = {
+  NODE_ENV,
+  PORT,
+  FRONTEND_URL,
+  CORS_ORIGINS: configuredCorsOrigins,
+  DATABASE_URL,
+  DIRECT_URL,
+  JWT_SECRET: jwtSecretResult.data,
+};
+
 export const databaseConfig = {
   runtimeHost: databaseUrl.host,
-  directHost: directUrl?.host ?? null
+  directHost: directUrl.host,
 };

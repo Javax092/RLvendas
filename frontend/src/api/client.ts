@@ -1,29 +1,37 @@
 import axios from "axios";
 import { normalizeApiError } from "./helpers";
 
-function normalizeApiBaseUrl(rawBaseUrl?: string) {
-  const isProduction = import.meta.env.PROD;
-  const fallbackBaseUrl = "http://localhost:3333";
+function normalizeApiBaseUrl(rawBaseUrl: string | undefined) {
+  const value = rawBaseUrl?.trim();
 
-  if (!rawBaseUrl && isProduction) {
-    throw new Error("VITE_API_URL must be defined for production builds.");
+  if (!value) {
+    throw new Error(
+      "VITE_API_URL must be defined. Example: http://localhost:3333/api or https://your-backend.up.railway.app/api",
+    );
   }
 
-  const resolvedBaseUrl = (rawBaseUrl || fallbackBaseUrl)
-    .trim()
-    .replace(/\/+$/, "");
+  let url: URL;
 
-  if (resolvedBaseUrl.endsWith("/api")) {
-    return resolvedBaseUrl;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error(`VITE_API_URL must be a valid absolute URL. Received "${rawBaseUrl ?? ""}".`);
   }
 
-  return `${resolvedBaseUrl}/api`;
+  if (!["http:", "https:"].includes(url.protocol)) {
+    throw new Error(`VITE_API_URL must use http or https. Received "${url.protocol}".`);
+  }
+
+  const normalized = value.replace(/\/+$/, "");
+
+  return normalized.endsWith("/api") ? normalized : `${normalized}/api`;
 }
 
 const baseURL = normalizeApiBaseUrl(import.meta.env.VITE_API_URL);
 
 export const api = axios.create({
   baseURL,
+  withCredentials: false,
   timeout: 15_000,
   headers: {
     Accept: "application/json",
@@ -43,3 +51,5 @@ export function setAuthToken(token?: string) {
     delete api.defaults.headers.common.Authorization;
   }
 }
+
+export { baseURL as apiBaseUrl };
