@@ -15,15 +15,40 @@ function toNumber(value: Prisma.Decimal | number | string) {
   return Number(value);
 }
 
-export const createPublicOrder = asyncHandler(async (request: Request, response: Response) => {
-  const body = createOrderSchema.parse(request.body);
-  const slug = String(request.params.slug);
+function normalizeSlug(slug: string) {
+  return slug.toLowerCase().replace(/burguer/g, "burger").replace(/[^a-z0-9]/g, "");
+}
 
-  const restaurant = await prisma.restaurant.findUnique({
+async function findRestaurantByPublicSlug(slug: string) {
+  const exactMatch = await prisma.restaurant.findUnique({
     where: {
       slug
     }
   });
+
+  if (exactMatch) {
+    return exactMatch;
+  }
+
+  const normalizedSlug = normalizeSlug(slug);
+  const restaurants = await prisma.restaurant.findMany({
+    select: {
+      id: true,
+      slug: true,
+      whatsappNumber: true
+    }
+  });
+
+  return (
+    restaurants.find((restaurant) => normalizeSlug(restaurant.slug) === normalizedSlug) ?? null
+  );
+}
+
+export const createPublicOrder = asyncHandler(async (request: Request, response: Response) => {
+  const body = createOrderSchema.parse(request.body);
+  const slug = String(request.params.slug);
+
+  const restaurant = await findRestaurantByPublicSlug(slug);
 
   if (!restaurant) {
     throw new ApiError(404, "Restaurante nao encontrado.");
@@ -209,11 +234,7 @@ export const getPublicUpsellSuggestion = asyncHandler(async (request: Request, r
   const body = publicUpsellSchema.parse(request.body);
   const slug = String(request.params.slug);
 
-  const restaurant = await prisma.restaurant.findUnique({
-    where: {
-      slug
-    }
-  });
+  const restaurant = await findRestaurantByPublicSlug(slug);
 
   if (!restaurant) {
     throw new ApiError(404, "Restaurante nao encontrado.");
