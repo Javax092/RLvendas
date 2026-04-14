@@ -1,99 +1,85 @@
 import type { ReactNode } from "react";
 import { createContext, useEffect, useMemo, useState } from "react";
-import { fetchMe, loginRequest } from "../api/auth";
+import {
+  type AuthSession,
+  AUTH_STORAGE_KEY,
+  fetchMe,
+  loginRequest,
+  logout,
+  persistAuth,
+  restoreAuth,
+} from "../api/auth";
 import { normalizeApiError } from "../api/helpers";
 import { setAuthToken } from "../api/client";
 
-type RestaurantSession = {
-  id?: string;
-  slug: string;
-  name: string;
-  plan?: string;
-};
-
-type AuthUser = {
-  id: string;
-  name?: string;
-  email: string;
-  role?: string;
-  restaurant?: RestaurantSession;
-};
-
-type LoginResponse = {
-  token: string;
-  user?: AuthUser;
-  restaurant?: RestaurantSession;
-};
-
 type AuthContextValue = {
   token?: string;
-  session?: LoginResponse;
+  session: AuthSession | null;
+  isAuthenticated: boolean;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => void;
 };
 
 export const AuthContext = createContext<AuthContextValue>({
+  session: null,
+  isAuthenticated: false,
   loading: true,
   signIn: async () => undefined,
   signOut: () => undefined,
 });
 
-const storageKey = "rlburger:session";
-
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<LoginResponse | undefined>();
+  const [session, setSession] = useState<AuthSession | null>(null);
   const [token, setToken] = useState<string | undefined>();
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const raw = window.localStorage.getItem(storageKey);
+    const restored = restoreAuth();
 
-    if (!raw) {
+    if (!restored) {
       setLoading(false);
       return;
     }
 
-    try {
-      const parsed = JSON.parse(raw) as LoginResponse & { token: string };
-
-      if (!parsed?.token) {
-        throw new Error("Sessao invalida.");
-      }
-
-      setToken(parsed.token);
-      setSession(parsed);
-      setAuthToken(parsed.token);
-    } catch {
-      window.localStorage.removeItem(storageKey);
-      setAuthToken(undefined);
-      setLoading(false);
-      return;
-    }
+    setToken(restored.token);
+    setSession(restored);
+    setAuthToken(restored.token);
 
     fetchMe()
-      .then((me: AuthUser) => {
-        setSession((current) =>
-          current
-            ? {
-                ...current,
-                user: {
-                  id: me.id,
-                  name: me.name,
-                  email: me.email,
-                  role: me.role,
-                  restaurant: me.restaurant,
-                },
-                restaurant: me.restaurant ?? current.restaurant,
-              }
-            : current,
-        );
+      .then((snapshot) => {
+        setSession((current) => {
+          if (!current) {
+            return current;
+          }
+
+          const nextSession: AuthSession = {
+            token: current.token,
+            user: snapshot.user,
+            restaurant: snapshot.restaurant,
+          };
+
+          persistAuth(nextSession);
+          return nextSession;
+        });
       })
-      .catch(() => {
-        window.localStorage.removeItem(storageKey);
-        setToken(undefined);
-        setSession(undefined);
-        setAuthToken(undefined);
+      .catch((error: unknown) => {
+        const normalized = normalizeApiError(error);
+
+        if (normalized.status === 401 || normalized.status === 403) {
+          logout();
+          setToken(undefined);
+          setSession(null);
+          setAuthToken(undefined);
+          return;
+        }
+
+        const fallbackRaw = window.localStorage.getItem(AUTH_STORAGE_KEY);
+        if (!fallbackRaw) {
+          setToken(undefined);
+          setSession(null);
+          setAuthToken(undefined);
+        }
       })
       .finally(() => setLoading(false));
   }, []);
@@ -103,23 +89,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       throw normalizeApiError(error);
     });
 
+    setAuthToken(data.token);
     setToken(data.token);
     setSession(data);
-    setAuthToken(data.token);
-    window.localStorage.setItem(storageKey, JSON.stringify(data));
+    persistAuth(data);
   }
 
   function signOut() {
     setToken(undefined);
-    setSession(undefined);
-    setAuthToken(undefined);
-    window.localStorage.removeItem(storageKey);
+    setSession(null);
+    logout();
   }
 
   const value = useMemo(
     () => ({
       token,
       session,
+      isAuthenticated: Boolean(token && session),
       loading,
       signIn,
       signOut,

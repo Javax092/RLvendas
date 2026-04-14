@@ -4,6 +4,14 @@ import { ZodError } from "zod";
 import { ApiError } from "../utils/api-error.js";
 
 export function errorHandler(error: unknown, _request: Request, response: Response, _next: NextFunction) {
+  if (error instanceof Error && error.message.startsWith("Not allowed by CORS:")) {
+    return response.status(403).json({
+      error: {
+        message: "Origem nao permitida por CORS."
+      }
+    });
+  }
+
   if (error instanceof ZodError) {
     return response.status(400).json({
       error: {
@@ -64,7 +72,7 @@ export function errorHandler(error: unknown, _request: Request, response: Respon
   }
 
   if (error instanceof Error) {
-    console.error(`[500] ${error.message}`);
+    console.error(`[500] ${_request.method} ${_request.originalUrl} ${error.message}`);
     console.error(error.stack);
   } else {
     console.error("[500] Unexpected non-error thrown", error);

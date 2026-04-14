@@ -9,6 +9,8 @@ import { ToastProvider } from "./contexts/ToastContext";
 import { ToastViewport } from "./components/ToastViewport";
 import { restoreAuth } from "./api/auth";
 
+restoreAuth();
+
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <BrowserRouter>

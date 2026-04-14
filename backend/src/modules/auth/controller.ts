@@ -25,6 +25,20 @@ function isBcryptHash(value: string) {
   return /^\$2[aby]\$\d{2}\$/.test(value);
 }
 
+function serializeRestaurantSession(restaurant: {
+  id: string;
+  slug: string;
+  name: string;
+  plan: string;
+}) {
+  return {
+    id: restaurant.id,
+    slug: restaurant.slug,
+    name: restaurant.name,
+    plan: restaurant.plan
+  };
+}
+
 export const register = asyncHandler(async (request: Request, response: Response) => {
   const body = registerSchema.parse(request.body);
 
@@ -86,11 +100,9 @@ export const register = asyncHandler(async (request: Request, response: Response
   });
 
   return response.status(201).json({
-    data: {
-      token,
-      user: result.user,
-      restaurant: result.restaurant
-    }
+    token,
+    user: result.user,
+    restaurant: serializeRestaurantSession(result.restaurant)
   });
 });
 
@@ -136,7 +148,7 @@ export const login = asyncHandler(async (request: Request, response: Response) =
       role: user.role,
       restaurantId: user.restaurantId
     },
-    restaurant: user.restaurant
+    restaurant: serializeRestaurantSession(user.restaurant)
   });
 });
 
@@ -163,12 +175,14 @@ export const me = asyncHandler(async (request: Request, response: Response) => {
 
   return response.json({
     data: {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      restaurantId: user.restaurantId,
-      restaurant: user.restaurant
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        restaurantId: user.restaurantId
+      },
+      restaurant: serializeRestaurantSession(user.restaurant)
     }
   });
 });

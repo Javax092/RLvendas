@@ -15,6 +15,7 @@ import { authRoutes } from "../modules/auth/routes.js";
 import { listPublicCategories } from "../modules/categories/controller.js";
 import { categoryRoutes } from "../modules/categories/routes.js";
 import { createPublicOrder } from "../modules/orders/controller.js";
+import { getPublicUpsellSuggestion } from "../modules/orders/controller.js";
 import { orderRoutes } from "../modules/orders/routes.js";
 import { listPublicProducts } from "../modules/products/controller.js";
 import { productRoutes } from "../modules/products/routes.js";
@@ -43,7 +44,8 @@ export const registeredApiRoutes = [
   "GET /api/public/restaurants/:slug",
   "GET /api/public/restaurants/:slug/categories",
   "GET /api/public/restaurants/:slug/products",
-  "POST /api/public/restaurants/:slug/orders"
+  "POST /api/public/restaurants/:slug/orders",
+  "POST /api/public/restaurants/:slug/upsell"
 ] as const;
 
 apiRoutes.use("/auth", authRoutes);
@@ -69,3 +71,4 @@ apiRoutes.get("/public/restaurants/:slug", getPublicRestaurant);
 apiRoutes.get("/public/restaurants/:slug/categories", listPublicCategories);
 apiRoutes.get("/public/restaurants/:slug/products", listPublicProducts);
 apiRoutes.post("/public/restaurants/:slug/orders", createPublicOrder);
+apiRoutes.post("/public/restaurants/:slug/upsell", getPublicUpsellSuggestion);

@@ -1,7 +1,8 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { Minus, Plus, ShoppingBag, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import { createOrder, fetchUpsell } from "../api/orders";
+import { normalizeApiError } from "../api/helpers";
+import { createPublicOrder, fetchPublicUpsell } from "../api/orders";
 import { trackEvent } from "../api/analytics";
 import { useCart } from "../hooks/useCart";
 import { useToast } from "../hooks/useToast";
@@ -57,8 +58,7 @@ export function CartDrawer({
       return;
     }
 
-    const response = await fetchUpsell({
-      restaurantSlug,
+    const response = await fetchPublicUpsell(restaurantSlug, {
       items: items.map((item) => ({ productId: item.product.id, quantity: item.quantity }))
     });
 
@@ -72,44 +72,56 @@ export function CartDrawer({
 
     setSubmitting(true);
 
-    await trackEvent({
-      restaurantSlug,
-      type: "start_checkout",
-      payload: {
-        items: items.length,
-        total
+    try {
+      await trackEvent({
+        restaurantSlug,
+        type: "start_checkout",
+        payload: {
+          items: items.length,
+          total
+        }
+      }).catch(() => undefined);
+
+      const order = await createPublicOrder(restaurantSlug, {
+        customerName: checkout.customerName,
+        customerAddress: checkout.customerAddress,
+        paymentMethod: checkout.paymentMethod,
+        notes: checkout.notes,
+        items: items.map((item) => ({ productId: item.product.id, quantity: item.quantity }))
+      });
+
+      await trackEvent({
+        restaurantSlug,
+        type: "order_sent",
+        payload: {
+          total: order.total,
+          items: items.length
+        }
+      }).catch(() => undefined);
+
+      if (order.whatsappUrl) {
+        window.open(order.whatsappUrl, "_blank", "noopener,noreferrer");
       }
-    });
 
-    const order = await createOrder({
-      restaurantSlug,
-      customerName: checkout.customerName,
-      customerAddress: checkout.customerAddress,
-      paymentMethod: checkout.paymentMethod,
-      notes: checkout.notes,
-      items: items.map((item) => ({ productId: item.product.id, quantity: item.quantity }))
-    });
-
-    await trackEvent({
-      restaurantSlug,
-      type: "order_sent",
-      payload: {
-        total: order.total,
-        items: items.length
-      }
-    });
-
-    window.open(order.whatsappUrl, "_blank");
-    showToast({
-      type: "success",
-      title: "Pedido gerado",
-      description: "A conversa no WhatsApp foi aberta com a mensagem formatada."
-    });
-    clearCart();
-    setCheckout(defaultCheckout);
-    setSuggestion(null);
-    setSubmitting(false);
-    onClose?.();
+      showToast({
+        type: "success",
+        title: "Pedido gerado",
+        description: "A conversa no WhatsApp foi aberta com a mensagem formatada."
+      });
+      clearCart();
+      setCheckout(defaultCheckout);
+      setSuggestion(null);
+      onClose?.();
+    } catch (error) {
+      const normalized = normalizeApiError(error);
+      showToast({
+        type: "error",
+        title: "Nao foi possivel finalizar o pedido",
+        description: normalized.message
+      });
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (

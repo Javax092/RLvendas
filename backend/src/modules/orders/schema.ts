@@ -17,6 +17,15 @@ export const createOrderSchema = z.object({
     .min(1)
 });
 
+export const publicUpsellSchema = z.object({
+  items: z.array(
+    z.object({
+      productId: z.string().trim().min(1),
+      quantity: z.coerce.number().int().min(1)
+    })
+  )
+});
+
 export const updateOrderStatusSchema = z.object({
   status: z.enum(["PENDING", "PREPARING", "READY", "DELIVERED", "CANCELLED"])
 });

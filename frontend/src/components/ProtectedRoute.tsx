@@ -3,7 +3,7 @@ import { Navigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 
 export function ProtectedRoute({ children }: { children: ReactNode }) {
-  const { loading, token, session } = useAuth();
+  const { loading, isAuthenticated, session } = useAuth();
 
   if (loading) {
     return (
@@ -13,14 +13,11 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
     );
   }
 
-  if (!token) {
+  if (!isAuthenticated || !session?.user?.id || !session.restaurant?.id) {
     return <Navigate to="/admin/login" replace />;
   }
 
-  if (
-    session?.user?.role &&
-    !["owner", "admin", "manager"].includes(session.user.role)
-  ) {
+  if (!["owner", "admin", "manager"].includes(session.user.role)) {
     return <Navigate to="/admin/login" replace />;
   }
 

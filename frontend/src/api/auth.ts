@@ -1,69 +1,132 @@
 import { api, setAuthToken } from "./client";
+import { unwrapData } from "./helpers";
 
-export type RestaurantSession = {
-  id?: string;
+export const AUTH_STORAGE_KEY = "rlburger:session";
+
+export type SessionRestaurant = {
+  id: string;
   slug: string;
   name: string;
-  plan?: string;
+  plan: string;
 };
 
 export type AuthUser = {
   id: string;
-  name?: string;
+  name: string;
   email: string;
-  role?: string;
-  restaurant?: RestaurantSession;
+  role: string;
+  restaurantId?: string;
 };
 
-export type LoginResponse = {
+export type AuthSession = {
   token: string;
-  user?: AuthUser;
-  restaurant?: RestaurantSession;
+  user: AuthUser;
+  restaurant: SessionRestaurant;
 };
+
+export type AuthSessionSnapshot = Omit<AuthSession, "token">;
+
+function normalizeRestaurant(raw: unknown): SessionRestaurant {
+  const restaurant = (raw ?? {}) as Record<string, unknown>;
+
+  return {
+    id: String(restaurant.id ?? ""),
+    slug: String(restaurant.slug ?? ""),
+    name: String(restaurant.name ?? "Restaurante"),
+    plan: String(restaurant.plan ?? "BASIC"),
+  };
+}
+
+function normalizeUser(raw: unknown, restaurantId?: string): AuthUser {
+  const user = (raw ?? {}) as Record<string, unknown>;
+
+  return {
+    id: String(user.id ?? ""),
+    name: String(user.name ?? ""),
+    email: String(user.email ?? ""),
+    role: String(user.role ?? "owner"),
+    restaurantId:
+      typeof user.restaurantId === "string"
+        ? user.restaurantId
+        : restaurantId,
+  };
+}
+
+function normalizeLoginResponse(payload: unknown): AuthSession {
+  const raw = payload as Record<string, unknown>;
+  const restaurant = normalizeRestaurant(raw.restaurant);
+  const user = normalizeUser(raw.user, restaurant.id);
+
+  return {
+    token: String(raw.token ?? ""),
+    user,
+    restaurant,
+  };
+}
+
+function normalizeMeResponse(payload: unknown): AuthSessionSnapshot {
+  const raw = unwrapData(payload) as Record<string, unknown>;
+  const restaurant = normalizeRestaurant(raw.restaurant);
+  const user = normalizeUser(raw.user, restaurant.id);
+
+  return {
+    user,
+    restaurant,
+  };
+}
+
+export function persistAuth(session: AuthSession) {
+  window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(session));
+}
 
 export async function loginRequest(
   email: string,
   password: string,
-): Promise<LoginResponse> {
-  const { data } = await api.post<LoginResponse>("/auth/login", {
+): Promise<AuthSession> {
+  const { data } = await api.post("/auth/login", {
     email,
     password,
   });
 
-  if (data.token) {
-    setAuthToken(data.token);
+  const session = normalizeLoginResponse(data);
+
+  if (session.token) {
+    setAuthToken(session.token);
   }
 
-  return data;
+  return session;
 }
 
-export async function fetchMe(): Promise<AuthUser> {
-  const { data } = await api.get<AuthUser | { data: AuthUser }>("/auth/me");
+export async function fetchMe(): Promise<AuthSessionSnapshot> {
+  const { data } = await api.get("/auth/me");
+  return normalizeMeResponse(data);
+}
 
-  if ("data" in data) {
-    return data.data;
+export function restoreAuth(): AuthSession | undefined {
+  const raw = window.localStorage.getItem(AUTH_STORAGE_KEY);
+
+  if (!raw) {
+    setAuthToken(undefined);
+    return undefined;
   }
-
-  return data;
-}
-
-export function restoreAuth() {
-  const raw = window.localStorage.getItem("rlburger:session");
-
-  if (!raw) return;
 
   try {
-    const parsed = JSON.parse(raw) as { token?: string };
-    if (parsed?.token) {
-      setAuthToken(parsed.token);
+    const session = normalizeLoginResponse(JSON.parse(raw));
+
+    if (!session.token) {
+      throw new Error("Sessao invalida.");
     }
+
+    setAuthToken(session.token);
+    return session;
   } catch {
-    window.localStorage.removeItem("rlburger:session");
+    window.localStorage.removeItem(AUTH_STORAGE_KEY);
     setAuthToken(undefined);
+    return undefined;
   }
 }
 
 export function logout() {
-  window.localStorage.removeItem("rlburger:session");
+  window.localStorage.removeItem(AUTH_STORAGE_KEY);
   setAuthToken(undefined);
 }

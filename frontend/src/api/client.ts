@@ -3,7 +3,7 @@ import { normalizeApiError } from "./helpers";
 
 function normalizeApiBaseUrl(rawBaseUrl?: string) {
   const isProduction = import.meta.env.PROD;
-  const fallbackBaseUrl = "http://localhost:3333/api";
+  const fallbackBaseUrl = "http://localhost:3333";
 
   if (!rawBaseUrl && isProduction) {
     throw new Error("VITE_API_URL must be defined for production builds.");
@@ -24,7 +24,9 @@ const baseURL = normalizeApiBaseUrl(import.meta.env.VITE_API_URL);
 
 export const api = axios.create({
   baseURL,
+  timeout: 15_000,
   headers: {
+    Accept: "application/json",
     "Content-Type": "application/json",
   },
 });

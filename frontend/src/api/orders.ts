@@ -2,9 +2,15 @@ import { api } from "./client";
 import { normalizeOrder, unwrapData } from "./helpers";
 import type { Order } from "../types";
 
-export async function createOrder(payload: Record<string, unknown>) {
-  const { data } = await api.post<Order>("/orders", payload);
-  return data;
+export async function createPublicOrder(
+  restaurantSlug: string,
+  payload: Record<string, unknown>,
+) {
+  const { data } = await api.post<Order | { data: Order }>(
+    `/public/restaurants/${restaurantSlug}/orders`,
+    payload,
+  );
+  return normalizeOrder(unwrapData(data));
 }
 
 export async function fetchOrders() {
@@ -12,10 +18,13 @@ export async function fetchOrders() {
   return unwrapData(data).map(normalizeOrder);
 }
 
-export async function fetchUpsell(payload: Record<string, unknown>) {
+export async function fetchPublicUpsell(
+  restaurantSlug: string,
+  payload: Record<string, unknown>,
+) {
   const { data } = await api.post<{ suggestion: { id: string; name: string; price: number } | null }>(
-    "/orders/upsell",
-    payload
+    `/public/restaurants/${restaurantSlug}/upsell`,
+    payload,
   );
   return data;
 }

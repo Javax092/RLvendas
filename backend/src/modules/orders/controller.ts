@@ -1,10 +1,15 @@
 import { Prisma } from "@prisma/client";
 import type { Request, Response } from "express";
 import { prisma } from "../../lib/prisma.js";
+import { suggestUpsell } from "../../services/upsell.js";
 import { ApiError } from "../../utils/api-error.js";
 import { asyncHandler } from "../../utils/async-handler.js";
 import { buildWhatsAppMessage, buildWhatsAppUrl } from "../../utils/whatsapp.js";
-import { createOrderSchema, updateOrderStatusSchema } from "./schema.js";
+import {
+  createOrderSchema,
+  publicUpsellSchema,
+  updateOrderStatusSchema,
+} from "./schema.js";
 
 function toNumber(value: Prisma.Decimal | number | string) {
   return Number(value);
@@ -198,6 +203,62 @@ export const createPublicOrder = asyncHandler(async (request: Request, response:
   return response.status(201).json({
     data: order
   });
+});
+
+export const getPublicUpsellSuggestion = asyncHandler(async (request: Request, response: Response) => {
+  const body = publicUpsellSchema.parse(request.body);
+  const slug = String(request.params.slug);
+
+  const restaurant = await prisma.restaurant.findUnique({
+    where: {
+      slug
+    }
+  });
+
+  if (!restaurant) {
+    throw new ApiError(404, "Restaurante nao encontrado.");
+  }
+
+  const products = await prisma.product.findMany({
+    where: {
+      restaurantId: restaurant.id,
+      isActive: true
+    },
+    include: {
+      category: true
+    }
+  });
+
+  const cartItems = body.items
+    .map((item) => {
+      const product = products.find((entry) => entry.id === item.productId);
+
+      if (!product) {
+        return null;
+      }
+
+      return {
+        productId: product.id,
+        name: product.name,
+        categoryName: product.category.name,
+        price: Number(product.price),
+        quantity: item.quantity
+      };
+    })
+    .filter((item): item is NonNullable<typeof item> => Boolean(item));
+
+  const suggestion = suggestUpsell(
+    cartItems,
+    products.map((product) => ({
+      id: product.id,
+      name: product.name,
+      categoryName: product.category.name,
+      price: Number(product.price),
+      tags: product.tags
+    }))
+  );
+
+  return response.json({ suggestion });
 });
 
 export const listOrders = asyncHandler(async (request: Request, response: Response) => {

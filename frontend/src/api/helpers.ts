@@ -40,12 +40,40 @@ export function normalizeApiError(error: unknown): ApiClientError {
       return normalized;
     }
 
-    const message =
-      (error.response?.data as { error?: { message?: string } | string } | undefined)?.error instanceof Object
-        ? ((error.response?.data as { error?: { message?: string } }).error?.message ?? error.message)
-        : typeof (error.response?.data as { error?: string } | undefined)?.error === "string"
-          ? (error.response?.data as { error?: string }).error ?? error.message
-          : error.message;
+    const responseData = error.response.data as
+      | {
+          message?: string;
+          error?: { message?: string } | string;
+        }
+      | string
+      | undefined;
+
+    let message = error.message;
+
+    if (typeof responseData === "string" && responseData.trim()) {
+      message = responseData;
+    } else if (responseData && typeof responseData === "object") {
+      if (typeof responseData.message === "string" && responseData.message.trim()) {
+        message = responseData.message;
+      } else if (typeof responseData.error === "string" && responseData.error.trim()) {
+        message = responseData.error;
+      } else if (
+        responseData.error &&
+        typeof responseData.error === "object" &&
+        typeof responseData.error.message === "string" &&
+        responseData.error.message.trim()
+      ) {
+        message = responseData.error.message;
+      }
+    }
+
+    if (error.response.status === 401 && message === error.message) {
+      message = "Autenticacao necessaria. Faça login novamente.";
+    }
+
+    if (error.response.status === 403 && message === error.message) {
+      message = "Voce nao tem permissao para acessar este recurso.";
+    }
 
     const normalized = new Error(message) as ApiClientError;
     normalized.status = error.response?.status;
