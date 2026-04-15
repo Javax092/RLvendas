@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma.js";
 import { ok } from "../utils/api-response.js";
+import { toPlainNumber } from "../utils/serializers.js";
 
 const settingsSchema = z.object({
   restaurant: z.object({
@@ -47,7 +48,7 @@ export async function getSettings(request: Request, response: Response) {
         phone: restaurant?.whatsappNumber ?? "5592999999999",
         currency: "BRL",
         timezone: "America/Manaus",
-        deliveryFee: Number(restaurant?.settings?.deliveryFee ?? 0),
+        deliveryFee: toPlainNumber(restaurant?.settings?.deliveryFee),
         businessHours: restaurant?.settings?.businessHours ?? "Seg-Dom 11:00 as 23:00"
       },
       notifications: {
@@ -121,7 +122,7 @@ export async function updateSettings(request: Request, response: Response) {
         phone: restaurant.whatsappNumber,
         currency: body.restaurant.currency ?? "BRL",
         timezone: body.restaurant.timezone ?? "America/Manaus",
-        deliveryFee: Number(restaurant.settings?.deliveryFee ?? 0),
+        deliveryFee: toPlainNumber(restaurant.settings?.deliveryFee),
         businessHours: restaurant.settings?.businessHours ?? "Seg-Dom 11:00 as 23:00"
       },
       notifications: {

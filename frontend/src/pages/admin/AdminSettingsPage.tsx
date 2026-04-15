@@ -6,6 +6,7 @@ import { Input } from "../../components/Input";
 import { SectionHeading } from "../../components/SectionHeading";
 import { useToast } from "../../hooks/useToast";
 import type { RestaurantAdminSettings } from "../../types";
+import { toMoneyNumber } from "../../shared/lib/currency";
 
 export function AdminSettingsPage() {
   const [loading, setLoading] = useState(true);
@@ -110,7 +111,7 @@ export function AdminSettingsPage() {
           onChange={(event) =>
             setForm((current) => ({
               ...current,
-              restaurant: { ...current.restaurant, deliveryFee: Number(event.target.value) }
+              restaurant: { ...current.restaurant, deliveryFee: toMoneyNumber(event.target.value) }
             }))
           }
           disabled={loading}

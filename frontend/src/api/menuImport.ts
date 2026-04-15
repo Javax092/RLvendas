@@ -1,5 +1,5 @@
 import { api } from "./client";
-import { normalizeCurrencyValue } from "../utils/currency";
+import { normalizeCurrencyValue, normalizeNumber } from "../utils/currency";
 
 function normalizeMenuImportPayload(payload: any) {
   const items = Array.isArray(payload?.items)
@@ -12,8 +12,8 @@ function normalizeMenuImportPayload(payload: any) {
 
   return {
     ...payload,
-    count: Number(payload?.count ?? items.length) || items.length,
-    createdCount: Number(payload?.createdCount ?? items.length) || items.length,
+    count: normalizeNumber(payload?.count, items.length) || items.length,
+    createdCount: normalizeNumber(payload?.createdCount, items.length) || items.length,
     rawText: typeof payload?.rawText === "string" ? payload.rawText : "",
     fileName: typeof payload?.fileName === "string" ? payload.fileName : "",
     items,

@@ -1,6 +1,10 @@
 import { AxiosError } from "axios";
 import { normalizeCurrencyValue, normalizeNumber } from "../utils/currency";
 import type {
+  ApiCategory,
+  ApiProduct,
+  ApiPublicMenuResponse,
+  ApiRestaurantSettings,
   BillingPlan,
   BillingSnapshot,
   Category,
@@ -101,7 +105,7 @@ function toStringValue(value: unknown, fallback = "") {
   return typeof value === "string" ? value : fallback;
 }
 
-export function normalizeCategory(raw: any): Category {
+export function normalizeCategory(raw: ApiCategory | any): Category {
   return {
     id: toStringValue(raw?.id),
     name: toStringValue(raw?.name, "Sem categoria"),
@@ -112,7 +116,7 @@ export function normalizeCategory(raw: any): Category {
   };
 }
 
-export function normalizeProduct(raw: any): Product {
+export function normalizeProduct(raw: ApiProduct | any): Product {
   return {
     id: toStringValue(raw?.id),
     categoryId: toStringValue(raw?.categoryId),
@@ -131,7 +135,7 @@ export function normalizeProduct(raw: any): Product {
   };
 }
 
-export function normalizeRestaurantSettings(raw: any): RestaurantSettings {
+export function normalizeRestaurantSettings(raw: ApiRestaurantSettings | any): RestaurantSettings {
   return {
     heroTitle: toStringValue(raw?.heroTitle, "Seu burger favorito sem taxa de marketplace"),
     heroSubtitle: toStringValue(
@@ -148,7 +152,7 @@ export function normalizeRestaurantSettings(raw: any): RestaurantSettings {
   };
 }
 
-export function normalizePublicMenuResponse(raw: any): PublicMenuResponse {
+export function normalizePublicMenuResponse(raw: ApiPublicMenuResponse | any): PublicMenuResponse {
   const categories = Array.isArray(raw?.categories) ? raw.categories : [];
 
   return {

@@ -1,20 +1,22 @@
+import { formatCurrency, toMoneyNumber } from "../shared/lib/currency";
+
+export { formatCurrency, toMoneyNumber };
+
 export function normalizeNumber(value: unknown, fallback = 0) {
-  if (typeof value === "number") {
-    return Number.isFinite(value) ? value : fallback;
+  const parsed = toMoneyNumber(value);
+
+  if (
+    parsed === 0 &&
+    value !== 0 &&
+    value !== "0" &&
+    value !== "0.0" &&
+    value !== "0,0" &&
+    value !== null &&
+    value !== undefined
+  ) {
+    return fallback;
   }
 
-  if (typeof value === "string") {
-    const normalized = value.trim().replace(/\s+/g, "").replace(",", ".");
-
-    if (!normalized) {
-      return fallback;
-    }
-
-    const parsed = Number(normalized);
-    return Number.isFinite(parsed) ? parsed : fallback;
-  }
-
-  const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
@@ -24,14 +26,11 @@ export function normalizeCurrencyValue(value: unknown, fallback = 0) {
 
 export function parseOptionalNumberInput(value: string) {
   const normalized = value.trim();
-  return normalized ? normalizeNumber(normalized) : null;
-}
 
-export function formatCurrency(value: number | string | null | undefined) {
-  const amount = normalizeCurrencyValue(value);
+  if (!normalized) {
+    return null;
+  }
 
-  return new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: "BRL"
-  }).format(Number.isFinite(amount) ? amount : 0);
+  const parsed = toMoneyNumber(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
 }

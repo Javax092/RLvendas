@@ -94,7 +94,15 @@ export const createPublicOrder = asyncHandler(async (request: Request, response:
   const minimumOrderAmount = toSafeNumber(settings?.minimumOrderAmount ?? 0);
 
   if (subtotal < minimumOrderAmount) {
-    throw new ApiError(400, `Pedido minimo nao atingido. Valor minimo: R$ ${minimumOrderAmount.toFixed(2)}.`);
+    throw new ApiError(
+      400,
+      `Pedido minimo nao atingido. Valor minimo: ${minimumOrderAmount.toLocaleString("pt-BR", {
+        style: "currency",
+        currency: "BRL",
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      })}.`,
+    );
   }
 
   const total = subtotal + deliveryFee;

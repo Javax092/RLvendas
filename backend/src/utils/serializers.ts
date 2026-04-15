@@ -1,5 +1,37 @@
 import type { Prisma } from "@prisma/client";
-import { toSafeNumber, type NumericValue } from "./money.js";
+import type { NumericValue } from "./money.js";
+
+export function toPlainNumber(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  if (value && typeof value === "object") {
+    const maybe = value as {
+      toNumber?: () => number;
+      valueOf?: () => unknown;
+    };
+
+    try {
+      if (typeof maybe.toNumber === "function") {
+        const parsed = maybe.toNumber();
+        return Number.isFinite(parsed) ? parsed : 0;
+      }
+    } catch {}
+
+    try {
+      if (typeof maybe.valueOf === "function") {
+        const parsed = Number(maybe.valueOf());
+        return Number.isFinite(parsed) ? parsed : 0;
+      }
+    } catch {}
+  }
+
+  return 0;
+}
 
 type SerializableCategory = {
   id: string;
@@ -120,9 +152,9 @@ export function serializeProduct(product: SerializableProduct) {
     name: product.name,
     description: product.description,
     imageUrl: product.imageUrl ?? null,
-    price: toSafeNumber(product.price),
-    costPrice: product.costPrice == null ? null : toSafeNumber(product.costPrice),
-    compareAtPrice: product.compareAtPrice == null ? null : toSafeNumber(product.compareAtPrice),
+    price: toPlainNumber(product.price),
+    costPrice: product.costPrice == null ? null : toPlainNumber(product.costPrice),
+    compareAtPrice: product.compareAtPrice == null ? null : toPlainNumber(product.compareAtPrice),
     stockQuantity: product.stockQuantity ?? 0,
     isActive: product.isActive,
     isFeatured: product.isFeatured,
@@ -143,8 +175,8 @@ export function serializeRestaurantSettings(settings?: SerializableRestaurantSet
     seoTitle: settings.seoTitle ?? null,
     seoDescription: settings.seoDescription ?? null,
     bannerUrl: settings.bannerUrl ?? null,
-    deliveryFee: toSafeNumber(settings.deliveryFee),
-    minimumOrderAmount: toSafeNumber(settings.minimumOrderAmount),
+    deliveryFee: toPlainNumber(settings.deliveryFee),
+    minimumOrderAmount: toPlainNumber(settings.minimumOrderAmount),
     estimatedTimeMin: settings.estimatedTimeMin ?? 30,
     estimatedTimeMax: settings.estimatedTimeMax ?? 45,
     autoAcceptOrders: Boolean(settings.autoAcceptOrders ?? false),
@@ -189,9 +221,9 @@ export function serializeOrder(order: SerializableOrder) {
     customerAddress: order.customerAddress ?? null,
     paymentMethod: order.paymentMethod,
     notes: order.notes ?? null,
-    subtotal: toSafeNumber(order.subtotal),
-    deliveryFee: toSafeNumber(order.deliveryFee),
-    total: toSafeNumber(order.total),
+    subtotal: toPlainNumber(order.subtotal),
+    deliveryFee: toPlainNumber(order.deliveryFee),
+    total: toPlainNumber(order.total),
     whatsappMessage: order.whatsappMessage,
     whatsappUrl: order.whatsappUrl,
     status: order.status,
@@ -200,8 +232,8 @@ export function serializeOrder(order: SerializableOrder) {
       ? order.items.map((item) => ({
           id: item.id,
           quantity: item.quantity,
-          unitPrice: toSafeNumber(item.unitPrice),
-          totalPrice: toSafeNumber(item.totalPrice),
+          unitPrice: toPlainNumber(item.unitPrice),
+          totalPrice: toPlainNumber(item.totalPrice),
           notes: item.notes ?? null,
           product: serializeProduct(item.product),
         }))

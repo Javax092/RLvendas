@@ -1,3 +1,59 @@
+export type ApiMoneyValue = number | string | null;
+
+export type ApiProduct = {
+  id: string;
+  categoryId: string;
+  name: string;
+  description: string;
+  imageUrl?: string | null;
+  price: ApiMoneyValue;
+  costPrice?: ApiMoneyValue;
+  compareAtPrice?: ApiMoneyValue;
+  stockQuantity?: number | string | null;
+  isActive: boolean;
+  isFeatured: boolean;
+  productType: "SINGLE" | "COMBO" | "ADDON";
+  tags: string[];
+  category?: ApiCategory;
+};
+
+export type ApiCategory = {
+  id: string;
+  name: string;
+  slug: string;
+  description?: string | null;
+  sortOrder: number | string;
+  isActive: boolean;
+  products?: ApiProduct[];
+};
+
+export type ApiRestaurantSettings = {
+  heroTitle: string;
+  heroSubtitle: string;
+  seoTitle?: string | null;
+  seoDescription?: string | null;
+  deliveryFee: ApiMoneyValue;
+  minimumOrderAmount: ApiMoneyValue;
+  estimatedTimeMin: number | string;
+  estimatedTimeMax: number | string;
+  bannerUrl?: string | null;
+};
+
+export type ApiRestaurant = {
+  id: string;
+  name: string;
+  slug: string;
+  description?: string | null;
+  logoUrl?: string | null;
+  primaryColor: string;
+  secondaryColor: string;
+  whatsappNumber: string;
+  plan: "BASIC" | "PRO" | "PREMIUM";
+  isAiUpsellOn: boolean;
+  settings?: ApiRestaurantSettings | null;
+  categories?: ApiCategory[];
+};
+
 export type Product = {
   id: string;
   categoryId: string;
@@ -53,10 +109,12 @@ export type Restaurant = {
 };
 
 export type PublicMenuResponse = Restaurant;
+export type ApiPublicMenuResponse = ApiRestaurant;
 
 export type CartItem = {
   product: Product;
   quantity: number;
+  notes?: string;
 };
 
 export type Order = {

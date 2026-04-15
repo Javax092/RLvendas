@@ -1,6 +1,7 @@
 import { api } from "./client";
 import { normalizeOrder, unwrapData } from "./helpers";
 import type { Order } from "../types";
+import { toMoneyNumber } from "../shared/lib/currency";
 
 type PublicOrderResponse = Pick<Order, "id" | "total" | "status" | "whatsappMessage" | "whatsappUrl">;
 
@@ -34,7 +35,7 @@ export async function fetchPublicUpsell(
     suggestion: data.suggestion
       ? {
           ...data.suggestion,
-          price: Number(data.suggestion.price) || 0,
+          price: toMoneyNumber(data.suggestion.price),
         }
       : null,
   };
