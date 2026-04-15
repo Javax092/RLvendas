@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { createContext, useCallback, useEffect, useMemo, useState } from "react";
 import { normalizeCartItems } from "../api/helpers";
 import type { CartItem, Product } from "../types";
+import { calculateCartCount, calculateCartTotal } from "../utils/cart";
 
 const STORAGE_KEY = "don-burguer-saas-cart";
 
@@ -119,12 +120,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }));
   }, [restaurantScope]);
 
-  const total = useMemo(
-    () => items.reduce((sum, item) => sum + item.product.price * item.quantity, 0),
-    [items]
-  );
-
-  const count = useMemo(() => items.reduce((sum, item) => sum + item.quantity, 0), [items]);
+  const total = useMemo(() => calculateCartTotal(items), [items]);
+  const count = useMemo(() => calculateCartCount(items), [items]);
 
   const value = useMemo(
     () => ({

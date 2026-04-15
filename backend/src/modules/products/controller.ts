@@ -2,8 +2,31 @@ import type { Request, Response } from "express";
 import { prisma } from "../../lib/prisma.js";
 import { ApiError } from "../../utils/api-error.js";
 import { asyncHandler } from "../../utils/async-handler.js";
+import { toDecimalString } from "../../utils/money.js";
+import { serializeProduct } from "../../utils/serializers.js";
 import { slugify } from "../../utils/slug.js";
 import { createProductSchema, updateProductSchema } from "./schema.js";
+
+function normalizeSlug(slug: string) {
+  return slug.toLowerCase().replace(/burguer/g, "burger").replace(/[^a-z0-9]/g, "");
+}
+
+async function findRestaurantIdByPublicSlug(slug: string) {
+  const exactMatch = await prisma.restaurant.findUnique({
+    where: { slug },
+    select: { id: true, slug: true },
+  });
+
+  if (exactMatch) {
+    return exactMatch.id;
+  }
+
+  const restaurants = await prisma.restaurant.findMany({
+    select: { id: true, slug: true },
+  });
+
+  return restaurants.find((restaurant) => normalizeSlug(restaurant.slug) === normalizeSlug(slug))?.id ?? null;
+}
 
 async function ensureCategoryOwnership(categoryId: string, restaurantId: string) {
   const category = await prisma.category.findFirst({
@@ -29,10 +52,10 @@ export const createProduct = asyncHandler(async (request: Request, response: Res
       name: body.name,
       slug: body.slug ?? slugify(body.name),
       description: body.description,
-      imageUrl: body.imageUrl,
-      price: body.price.toFixed(2),
-      costPrice: body.costPrice?.toFixed(2) ?? null,
-      compareAtPrice: body.compareAtPrice?.toFixed(2) ?? null,
+      imageUrl: body.imageUrl ?? null,
+      price: toDecimalString(body.price),
+      costPrice: body.costPrice == null ? null : toDecimalString(body.costPrice),
+      compareAtPrice: body.compareAtPrice == null ? null : toDecimalString(body.compareAtPrice),
       stockQuantity: body.stockQuantity ?? 40,
       isActive: body.isActive ?? true,
       isFeatured: body.isFeatured ?? false,
@@ -41,7 +64,7 @@ export const createProduct = asyncHandler(async (request: Request, response: Res
     }
   });
 
-  return response.status(201).json({ data: product });
+  return response.status(201).json({ data: serializeProduct(product) });
 });
 
 export const listProducts = asyncHandler(async (request: Request, response: Response) => {
@@ -57,7 +80,7 @@ export const listProducts = asyncHandler(async (request: Request, response: Resp
     orderBy: [{ isFeatured: "desc" }, { createdAt: "desc" }]
   });
 
-  return response.json({ data: products });
+  return response.json({ data: products.map(serializeProduct) });
 });
 
 export const getProduct = asyncHandler(async (request: Request, response: Response) => {
@@ -76,7 +99,7 @@ export const getProduct = asyncHandler(async (request: Request, response: Respon
     throw new ApiError(404, "Produto nao encontrado.");
   }
 
-  return response.json({ data: product });
+  return response.json({ data: serializeProduct(product) });
 });
 
 export const updateProduct = asyncHandler(async (request: Request, response: Response) => {
@@ -105,10 +128,16 @@ export const updateProduct = asyncHandler(async (request: Request, response: Res
       name: body.name,
       slug: body.slug ?? (body.name ? slugify(body.name) : undefined),
       description: body.description,
-      imageUrl: body.imageUrl,
-      price: body.price?.toFixed(2),
-      costPrice: body.costPrice === null ? null : body.costPrice?.toFixed(2),
-      compareAtPrice: body.compareAtPrice === null ? null : body.compareAtPrice?.toFixed(2),
+      imageUrl: body.imageUrl === undefined ? undefined : body.imageUrl ?? null,
+      price: body.price === undefined ? undefined : toDecimalString(body.price),
+      costPrice:
+        body.costPrice === undefined ? undefined : body.costPrice === null ? null : toDecimalString(body.costPrice),
+      compareAtPrice:
+        body.compareAtPrice === undefined
+          ? undefined
+          : body.compareAtPrice === null
+            ? null
+            : toDecimalString(body.compareAtPrice),
       stockQuantity: body.stockQuantity,
       isActive: body.isActive,
       isFeatured: body.isFeatured,
@@ -117,7 +146,7 @@ export const updateProduct = asyncHandler(async (request: Request, response: Res
     }
   });
 
-  return response.json({ data: product });
+  return response.json({ data: serializeProduct(product) });
 });
 
 export const deleteProduct = asyncHandler(async (request: Request, response: Response) => {
@@ -145,19 +174,15 @@ export const deleteProduct = asyncHandler(async (request: Request, response: Res
 export const listPublicProducts = asyncHandler(async (request: Request, response: Response) => {
   const categoryId = typeof request.query.categoryId === "string" ? request.query.categoryId : undefined;
   const slug = String(request.params.slug);
-  const restaurant = await prisma.restaurant.findUnique({
-    where: {
-      slug
-    }
-  });
+  const restaurantId = await findRestaurantIdByPublicSlug(slug);
 
-  if (!restaurant) {
+  if (!restaurantId) {
     throw new ApiError(404, "Restaurante nao encontrado.");
   }
 
   const products = await prisma.product.findMany({
     where: {
-      restaurantId: restaurant.id,
+      restaurantId,
       categoryId,
       isActive: true
     },
@@ -167,5 +192,5 @@ export const listPublicProducts = asyncHandler(async (request: Request, response
     orderBy: [{ isFeatured: "desc" }, { createdAt: "desc" }]
   });
 
-  return response.json({ data: products });
+  return response.json({ data: products.map(serializeProduct) });
 });

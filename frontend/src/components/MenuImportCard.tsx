@@ -3,6 +3,7 @@ import { FileUp, Sparkles } from "lucide-react";
 import { useState } from "react";
 import { importMenuFromFile, importMenuFromText, previewMenuImport } from "../api/menuImport";
 import { useToast } from "../hooks/useToast";
+import { formatCurrency } from "../utils/currency";
 import { Button } from "./Button";
 import { Input } from "./Input";
 
@@ -111,7 +112,7 @@ export function MenuImportCard({ onImported }: { onImported: () => void }) {
                 <div key={`${item.name}-${item.price}`} className="rounded-2xl border border-white/10 p-3">
                   <p className="font-semibold text-white">{item.name}</p>
                   <p className="text-sm text-slate-400">{item.categoryName}</p>
-                  <p className="mt-2 text-sm text-emerald-400">R$ {item.price.toFixed(2)}</p>
+                  <p className="mt-2 text-sm text-emerald-400">{formatCurrency(item.price)}</p>
                 </div>
               ))
             )}

@@ -1,6 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import { Prisma } from "@prisma/client";
 import { ZodError } from "zod";
+import { env } from "../config/env.js";
 import { ApiError } from "../utils/api-error.js";
 
 export function errorHandler(error: unknown, _request: Request, response: Response, _next: NextFunction) {
@@ -73,7 +74,10 @@ export function errorHandler(error: unknown, _request: Request, response: Respon
 
   if (error instanceof Error) {
     console.error(`[500] ${_request.method} ${_request.originalUrl} ${error.message}`);
-    console.error(error.stack);
+
+    if (env.NODE_ENV !== "production") {
+      console.error(error.stack);
+    }
   } else {
     console.error("[500] Unexpected non-error thrown", error);
   }

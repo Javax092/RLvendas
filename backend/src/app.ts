@@ -25,10 +25,13 @@ app.options("*", corsPreflight);
 app.use(morgan(env.NODE_ENV === "production" ? "combined" : "dev"));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use((request, _response, next) => {
-  console.info(`[req] ${request.method} ${request.path} origin=${request.headers.origin ?? "n/a"}`);
-  next();
-});
+
+if (env.NODE_ENV !== "production") {
+  app.use((request, _response, next) => {
+    console.info(`[req] ${request.method} ${request.path} origin=${request.headers.origin ?? "n/a"}`);
+    next();
+  });
+}
 
 app.get("/health", (_request, response) => {
   response.status(200).json({

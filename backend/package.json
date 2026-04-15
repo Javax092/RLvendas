@@ -15,7 +15,8 @@
     "prisma:generate": "DIRECT_URL=${DIRECT_URL:-$DATABASE_URL} prisma generate",
     "prisma:seed": "tsx prisma/seed.ts",
     "prisma:studio": "prisma studio",
-    "seed": "tsx prisma/seed.ts"
+    "seed": "tsx prisma/seed.ts",
+    "test": "node --import tsx --test tests/**/*.test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

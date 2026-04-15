@@ -1,6 +1,6 @@
 import type { FormEvent } from "react";
 import { LockKeyhole, Mail, Sandwich } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { normalizeApiError } from "../../api/helpers";
 import { Button } from "../../components/Button";
@@ -10,9 +10,28 @@ import { useAuth } from "../../hooks/useAuth";
 export function LoginPage() {
   const navigate = useNavigate();
   const { signIn } = useAuth();
-  const [email, setEmail] = useState("admin@rlburguer.app");
-  const [password, setPassword] = useState("123456");
+  const [email, setEmail] = useState(import.meta.env.DEV ? "admin@rlburguer.app" : "");
+  const [password, setPassword] = useState(import.meta.env.DEV ? "123456" : "");
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    const preload = () => {
+      void import("./AdminDashboardPage");
+      void import("./AdminOrdersPage");
+      void import("./AdminProductsPage");
+    };
+    const idleWindow = window as Window & {
+      requestIdleCallback?: (callback: IdleRequestCallback, options?: IdleRequestOptions) => number;
+    };
+
+    if (typeof idleWindow.requestIdleCallback === "function") {
+      idleWindow.requestIdleCallback(preload, { timeout: 1500 });
+      return;
+    }
+
+    const timeout = globalThis.setTimeout(preload, 600);
+    return () => globalThis.clearTimeout(timeout);
+  }, []);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();

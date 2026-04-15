@@ -1,4 +1,5 @@
 import { AxiosError } from "axios";
+import { normalizeCurrencyValue, normalizeNumber } from "../utils/currency";
 import type {
   BillingPlan,
   BillingSnapshot,
@@ -93,8 +94,7 @@ export function normalizeApiError(error: unknown): ApiClientError {
 }
 
 function toNumber(value: unknown, fallback = 0) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
+  return normalizeNumber(value, fallback);
 }
 
 function toStringValue(value: unknown, fallback = "") {
@@ -119,9 +119,9 @@ export function normalizeProduct(raw: any): Product {
     name: toStringValue(raw?.name, "Produto sem nome"),
     description: toStringValue(raw?.description, "Sem descricao cadastrada."),
     imageUrl: raw?.imageUrl ?? null,
-    price: toNumber(raw?.price),
-    costPrice: raw?.costPrice == null ? null : toNumber(raw?.costPrice),
-    compareAtPrice: raw?.compareAtPrice == null ? null : toNumber(raw?.compareAtPrice),
+    price: normalizeCurrencyValue(raw?.price),
+    costPrice: raw?.costPrice == null ? null : normalizeCurrencyValue(raw?.costPrice),
+    compareAtPrice: raw?.compareAtPrice == null ? null : normalizeCurrencyValue(raw?.compareAtPrice),
     stockQuantity: toNumber(raw?.stockQuantity, 0),
     isActive: Boolean(raw?.isActive ?? true),
     isFeatured: Boolean(raw?.isFeatured ?? false),
@@ -140,8 +140,8 @@ export function normalizeRestaurantSettings(raw: any): RestaurantSettings {
     ),
     seoTitle: raw?.seoTitle ?? null,
     seoDescription: raw?.seoDescription ?? null,
-    deliveryFee: toNumber(raw?.deliveryFee),
-    minimumOrderAmount: toNumber(raw?.minimumOrderAmount),
+    deliveryFee: normalizeCurrencyValue(raw?.deliveryFee),
+    minimumOrderAmount: normalizeCurrencyValue(raw?.minimumOrderAmount),
     estimatedTimeMin: toNumber(raw?.estimatedTimeMin, 30),
     estimatedTimeMax: toNumber(raw?.estimatedTimeMax, 45),
     bannerUrl: raw?.bannerUrl ?? null
@@ -212,7 +212,7 @@ export function normalizeOrder(raw: any): Order {
     ? raw.items.map((item: any, index: number) => ({
         id: toStringValue(item?.id, `${raw?.id ?? "order"}-${index}`),
         quantity: toNumber(item?.quantity, 1),
-        totalPrice: toNumber(item?.totalPrice),
+        totalPrice: normalizeCurrencyValue(item?.totalPrice),
         product: item?.product
           ? normalizeProduct(item.product)
           : {
@@ -221,7 +221,7 @@ export function normalizeOrder(raw: any): Order {
               name: toStringValue(item?.name, "Item removido"),
               description: "",
               imageUrl: null,
-              price: toNumber(item?.unitPrice),
+              price: normalizeCurrencyValue(item?.unitPrice),
               compareAtPrice: null,
               isActive: true,
               isFeatured: false,
@@ -238,9 +238,9 @@ export function normalizeOrder(raw: any): Order {
     customerAddress: raw?.customerAddress ?? null,
     paymentMethod: toStringValue(raw?.paymentMethod, "Nao informado"),
     notes: raw?.notes ?? null,
-    subtotal: toNumber(raw?.subtotal),
-    deliveryFee: toNumber(raw?.deliveryFee),
-    total: toNumber(raw?.total),
+    subtotal: normalizeCurrencyValue(raw?.subtotal),
+    deliveryFee: normalizeCurrencyValue(raw?.deliveryFee),
+    total: normalizeCurrencyValue(raw?.total),
     whatsappMessage: toStringValue(raw?.whatsappMessage),
     whatsappUrl: toStringValue(raw?.whatsappUrl),
     status: toStringValue(raw?.status, "PENDING"),
@@ -285,11 +285,11 @@ export function normalizeInsights(raw: any): DashboardInsights {
         week: toNumber(summary.totalOrders?.week),
         month: toNumber(summary.totalOrders?.month)
       },
-      totalRevenue: toNumber(summary.totalRevenue),
-      monthlyRevenue: toNumber(summary.monthlyRevenue),
-      averageTicket: toNumber(summary.averageTicket),
+      totalRevenue: normalizeCurrencyValue(summary.totalRevenue),
+      monthlyRevenue: normalizeCurrencyValue(summary.monthlyRevenue),
+      averageTicket: normalizeCurrencyValue(summary.averageTicket),
       conversionRate: toNumber(summary.conversionRate),
-      savedFees: toNumber(summary.savedFees)
+      savedFees: normalizeCurrencyValue(summary.savedFees)
     },
     charts: {
       ordersByDay: Array.isArray(charts.ordersByDay)
@@ -309,12 +309,12 @@ export function normalizeInsights(raw: any): DashboardInsights {
       id: toStringValue(item?.id, String(index + 1)),
       name: toStringValue(item?.name, "Produto"),
       quantity: toNumber(item?.quantity ?? item?.sales),
-      revenue: toNumber(item?.revenue)
+      revenue: normalizeCurrencyValue(item?.revenue)
     })),
     topProfitableProducts: Array.isArray(raw?.topProfitableProducts)
       ? raw.topProfitableProducts.map((item: any) => ({
           name: toStringValue(item?.name, "Produto"),
-          estimatedProfit: toNumber(item?.estimatedProfit)
+          estimatedProfit: normalizeCurrencyValue(item?.estimatedProfit)
         }))
       : [],
     fallbackUsed: Boolean(raw?.fallbackUsed)
@@ -329,7 +329,7 @@ export function normalizeSettings(raw: any): RestaurantAdminSettings {
       phone: toStringValue(raw?.restaurant?.phone, "5592999999999"),
       currency: toStringValue(raw?.restaurant?.currency, "BRL"),
       timezone: toStringValue(raw?.restaurant?.timezone, "America/Manaus"),
-      deliveryFee: toNumber(raw?.restaurant?.deliveryFee),
+      deliveryFee: normalizeCurrencyValue(raw?.restaurant?.deliveryFee),
       businessHours: toStringValue(raw?.restaurant?.businessHours, "Seg-Dom 11:00 as 23:00")
     },
     notifications: {
@@ -360,13 +360,13 @@ export function normalizeBillingSnapshot(raw: any): BillingSnapshot {
   return {
     currentPlan: {
       name: toStringValue(currentPlan?.name, "Pro"),
-      price: toNumber(currentPlan?.price, 99.9),
+      price: normalizeCurrencyValue(currentPlan?.price, 99.9),
       status: toStringValue(currentPlan?.status, "active")
     },
     availablePlans: availablePlans.map((plan: any): BillingPlan => ({
       id: toStringValue(plan?.id),
       name: toStringValue(plan?.name, "Plano"),
-      price: toNumber(plan?.price ?? plan?.priceMonthly),
+      price: normalizeCurrencyValue(plan?.price ?? plan?.priceMonthly),
       currency: toStringValue(plan?.currency, "BRL"),
       features: Array.isArray(plan?.features) ? plan.features.map((feature: unknown) => String(feature)) : []
     }))
@@ -375,9 +375,9 @@ export function normalizeBillingSnapshot(raw: any): BillingSnapshot {
 
 export function normalizeFinanceSummary(raw: any): FinanceSummary {
   return {
-    revenue: toNumber(raw?.revenue),
-    estimatedProfit: toNumber(raw?.estimatedProfit),
-    averageTicket: toNumber(raw?.averageTicket),
+    revenue: normalizeCurrencyValue(raw?.revenue),
+    estimatedProfit: normalizeCurrencyValue(raw?.estimatedProfit),
+    averageTicket: normalizeCurrencyValue(raw?.averageTicket),
     totalOrders: toNumber(raw?.totalOrders)
   };
 }
@@ -388,16 +388,16 @@ export function normalizeCustomer(raw: any): Customer {
     name: toStringValue(raw?.name, "Cliente"),
     phone: raw?.phone ?? null,
     totalOrders: toNumber(raw?.totalOrders),
-    totalSpent: toNumber(raw?.totalSpent),
+    totalSpent: normalizeCurrencyValue(raw?.totalSpent),
     lastOrderDate: raw?.lastOrderDate ?? null,
-    averageTicket: toNumber(raw?.averageTicket),
+    averageTicket: normalizeCurrencyValue(raw?.averageTicket),
     frequencyDays: raw?.frequencyDays == null ? null : toNumber(raw?.frequencyDays),
     isVip: Boolean(raw?.isVip),
     segment: raw?.segment ?? "novo",
     recentOrders: Array.isArray(raw?.recentOrders)
       ? raw.recentOrders.map((order: any) => ({
           id: toStringValue(order?.id),
-          total: toNumber(order?.total),
+          total: normalizeCurrencyValue(order?.total),
           createdAt: toStringValue(order?.createdAt),
           status: toStringValue(order?.status)
         }))
@@ -426,6 +426,6 @@ export function normalizePromotion(raw: any): Promotion {
     description: raw?.description ?? null,
     productId: raw?.productId ?? null,
     productName: raw?.productName ?? null,
-    originalPrice: raw?.originalPrice == null ? undefined : toNumber(raw?.originalPrice)
+    originalPrice: raw?.originalPrice == null ? undefined : normalizeCurrencyValue(raw?.originalPrice)
   };
 }

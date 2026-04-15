@@ -3,6 +3,7 @@ import type { Request, Response } from "express";
 import { prisma } from "../../lib/prisma.js";
 import { ApiError } from "../../utils/api-error.js";
 import { asyncHandler } from "../../utils/async-handler.js";
+import { toSafeNumber } from "../../utils/money.js";
 import { createAnalyticsEventSchema } from "./schema.js";
 
 const analyticsTypeMap: Record<string, string> = {
@@ -57,8 +58,10 @@ export const createAnalyticsEvent = asyncHandler(async (request: Request, respon
 
 export const listAnalytics = asyncHandler(async (request: Request, response: Response) => {
   const restaurantId = request.user!.restaurantId;
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
 
-  const [events, grouped, orders] = await Promise.all([
+  const [events, grouped, orders, todayOrders, itemStats, profitableProducts] = await Promise.all([
     prisma.analyticsEvent.findMany({
       where: { restaurantId },
       orderBy: { createdAt: "desc" },
@@ -75,23 +78,102 @@ export const listAnalytics = asyncHandler(async (request: Request, response: Res
       where: { restaurantId },
       select: {
         total: true,
+        status: true,
+        createdAt: true
+      }
+    }),
+    prisma.order.findMany({
+      where: {
+        restaurantId,
+        createdAt: {
+          gte: startOfToday
+        }
+      },
+      select: {
+        total: true,
         status: true
+      }
+    }),
+    prisma.orderItem.groupBy({
+      by: ["productId"],
+      where: {
+        order: {
+          restaurantId
+        }
+      },
+      _sum: {
+        quantity: true,
+        totalPrice: true
+      },
+      orderBy: {
+        _sum: {
+          quantity: "desc"
+        }
+      },
+      take: 5
+    }),
+    prisma.product.findMany({
+      where: {
+        restaurantId,
+        isActive: true
+      },
+      select: {
+        id: true,
+        name: true,
+        price: true,
+        costPrice: true
       }
     })
   ]);
 
   const totalRevenue = orders
     .filter((order) => order.status !== "CANCELLED")
-    .reduce((sum, order) => sum + Number(order.total), 0);
+    .reduce((sum, order) => sum + toSafeNumber(order.total), 0);
+  const validTodayOrders = todayOrders.filter((order) => order.status !== "CANCELLED");
+  const todayRevenue = validTodayOrders.reduce((sum, order) => sum + toSafeNumber(order.total), 0);
+  const averageTicket = orders.length ? totalRevenue / orders.length : 0;
+  const productMap = new Map(profitableProducts.map((product) => [product.id, product]));
+  const topProducts = itemStats.map((item) => {
+    const product = productMap.get(item.productId);
+    return {
+      id: item.productId,
+      name: product?.name ?? "Produto",
+      quantity: toSafeNumber(item._sum.quantity ?? 0),
+      revenue: toSafeNumber(item._sum.totalPrice ?? 0)
+    };
+  });
+  const topProfitableProducts = profitableProducts
+    .map((product) => {
+      const revenue = topProducts.find((item) => item.id === product.id)?.revenue ?? 0;
+      const cost = toSafeNumber(product.costPrice ?? 0);
+      const unitPrice = toSafeNumber(product.price);
+      const estimatedMargin = unitPrice - cost;
+
+      return {
+        id: product.id,
+        name: product.name,
+        estimatedProfit: revenue > 0 && unitPrice > 0 ? (revenue / unitPrice) * estimatedMargin : 0
+      };
+    })
+    .sort((left, right) => right.estimatedProfit - left.estimatedProfit)
+    .slice(0, 5);
 
   return response.json({
     data: {
+      today: {
+        orders: validTodayOrders.length,
+        revenue: todayRevenue,
+        averageTicket: validTodayOrders.length ? todayRevenue / validTodayOrders.length : 0
+      },
       summary: grouped.map((item) => ({
         type: item.type,
         count: item._count.type
       })),
       totalOrders: orders.length,
       totalRevenue,
+      averageTicket,
+      topProducts,
+      topProfitableProducts,
       recentEvents: events
     }
   });

@@ -10,18 +10,44 @@ export function useMenuData(restaurantSlug: string) {
   const [activeCategory, setActiveCategory] = useState<string>();
 
   useEffect(() => {
+    let cancelled = false;
+
     setLoading(true);
     setError(undefined);
     fetchPublicMenu(restaurantSlug)
       .then((data) => {
+        if (cancelled) {
+          return;
+        }
+
         setRestaurant(data);
-        setActiveCategory((current) => current || data.categories?.[0]?.slug);
+        setActiveCategory((current) => {
+          const availableSlugs = new Set((data.categories ?? []).map((category) => category.slug));
+
+          if (current && availableSlugs.has(current)) {
+            return current;
+          }
+
+          return data.categories?.[0]?.slug;
+        });
       })
       .catch((reason) => {
+        if (cancelled) {
+          return;
+        }
+
         setRestaurant(null);
         setError(normalizeApiError(reason).message);
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [restaurantSlug]);
 
   const activeProducts = useMemo(() => {

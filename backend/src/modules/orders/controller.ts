@@ -1,19 +1,16 @@
-import { Prisma } from "@prisma/client";
 import type { Request, Response } from "express";
 import { prisma } from "../../lib/prisma.js";
 import { suggestUpsell } from "../../services/upsell.js";
 import { ApiError } from "../../utils/api-error.js";
 import { asyncHandler } from "../../utils/async-handler.js";
+import { toDecimalString, toSafeNumber } from "../../utils/money.js";
+import { serializeOrder } from "../../utils/serializers.js";
 import { buildWhatsAppMessage, buildWhatsAppUrl } from "../../utils/whatsapp.js";
 import {
   createOrderSchema,
   publicUpsellSchema,
   updateOrderStatusSchema,
 } from "./schema.js";
-
-function toNumber(value: Prisma.Decimal | number | string) {
-  return Number(value);
-}
 
 function normalizeSlug(slug: string) {
   return slug.toLowerCase().replace(/burguer/g, "burger").replace(/[^a-z0-9]/g, "");
@@ -35,6 +32,7 @@ async function findRestaurantByPublicSlug(slug: string) {
     select: {
       id: true,
       slug: true,
+      name: true,
       whatsappNumber: true
     }
   });
@@ -75,7 +73,7 @@ export const createPublicOrder = asyncHandler(async (request: Request, response:
       throw new ApiError(400, "Produto invalido no pedido.");
     }
 
-    const unitPrice = toNumber(product.price);
+    const unitPrice = toSafeNumber(product.price);
     return {
       productId: product.id,
       name: product.name,
@@ -92,8 +90,8 @@ export const createPublicOrder = asyncHandler(async (request: Request, response:
       restaurantId: restaurant.id
     }
   });
-  const deliveryFee = toNumber(settings?.deliveryFee ?? 0);
-  const minimumOrderAmount = toNumber(settings?.minimumOrderAmount ?? 0);
+  const deliveryFee = toSafeNumber(settings?.deliveryFee ?? 0);
+  const minimumOrderAmount = toSafeNumber(settings?.minimumOrderAmount ?? 0);
 
   if (subtotal < minimumOrderAmount) {
     throw new ApiError(400, `Pedido minimo nao atingido. Valor minimo: R$ ${minimumOrderAmount.toFixed(2)}.`);
@@ -101,6 +99,7 @@ export const createPublicOrder = asyncHandler(async (request: Request, response:
 
   const total = subtotal + deliveryFee;
   const whatsappMessage = buildWhatsAppMessage({
+    restaurantName: restaurant.name,
     customerName: body.customerName,
     customerPhone: body.customerPhone,
     customerAddress: body.customerAddress,
@@ -140,7 +139,7 @@ export const createPublicOrder = asyncHandler(async (request: Request, response:
       name: body.customerName,
       phone: body.customerPhone ?? body.customerName,
       totalOrders: 1,
-      totalSpent: total.toFixed(2),
+      totalSpent: toDecimalString(total),
       lastOrderDate: new Date()
     }
   });
@@ -155,26 +154,19 @@ export const createPublicOrder = asyncHandler(async (request: Request, response:
         customerAddress: body.customerAddress,
         paymentMethod: body.paymentMethod,
         notes: body.notes,
-        subtotal: subtotal.toFixed(2),
-        deliveryFee: deliveryFee.toFixed(2),
-        total: total.toFixed(2),
+        subtotal: toDecimalString(subtotal),
+        deliveryFee: toDecimalString(deliveryFee),
+        total: toDecimalString(total),
         whatsappMessage,
         whatsappUrl,
         items: {
           create: orderItems.map((item) => ({
             productId: item.productId,
             quantity: item.quantity,
-            unitPrice: item.unitPrice.toFixed(2),
-            totalPrice: item.totalPrice.toFixed(2),
+            unitPrice: toDecimalString(item.unitPrice),
+            totalPrice: toDecimalString(item.totalPrice),
             notes: item.notes
           }))
-        }
-      },
-      include: {
-        items: {
-          include: {
-            product: true
-          }
         }
       }
     });
@@ -192,7 +184,11 @@ export const createPublicOrder = asyncHandler(async (request: Request, response:
       });
     }
 
-    await tx.loyalty.upsert({
+    return createdOrder;
+  });
+
+  void prisma.loyalty
+    .upsert({
       where: {
         customerId: customer.id
       },
@@ -209,24 +205,34 @@ export const createPublicOrder = asyncHandler(async (request: Request, response:
         points: body.items.length * 10 + Math.floor(total / 10),
         rewards: []
       }
+    })
+    .catch((error) => {
+      console.error("[order:loyalty]", error);
     });
 
-    await tx.analyticsEvent.create({
+  void prisma.analyticsEvent
+    .create({
       data: {
         restaurantId: restaurant.id,
         type: "order_created",
         payload: {
-          orderId: createdOrder.id,
+          orderId: order.id,
           total
         }
       }
+    })
+    .catch((error) => {
+      console.error("[order:analytics]", error);
     });
 
-    return createdOrder;
-  });
-
   return response.status(201).json({
-    data: order
+    data: {
+      id: order.id,
+      total,
+      status: order.status,
+      whatsappMessage,
+      whatsappUrl
+    }
   });
 });
 
@@ -262,7 +268,7 @@ export const getPublicUpsellSuggestion = asyncHandler(async (request: Request, r
         productId: product.id,
         name: product.name,
         categoryName: product.category.name,
-        price: Number(product.price),
+        price: toSafeNumber(product.price),
         quantity: item.quantity
       };
     })
@@ -274,7 +280,7 @@ export const getPublicUpsellSuggestion = asyncHandler(async (request: Request, r
       id: product.id,
       name: product.name,
       categoryName: product.category.name,
-      price: Number(product.price),
+      price: toSafeNumber(product.price),
       tags: product.tags
     }))
   );
@@ -307,7 +313,7 @@ export const listOrders = asyncHandler(async (request: Request, response: Respon
     }
   });
 
-  return response.json({ data: orders });
+  return response.json({ data: orders.map(serializeOrder) });
 });
 
 export const getOrder = asyncHandler(async (request: Request, response: Response) => {
@@ -330,7 +336,7 @@ export const getOrder = asyncHandler(async (request: Request, response: Response
     throw new ApiError(404, "Pedido nao encontrado.");
   }
 
-  return response.json({ data: order });
+  return response.json({ data: serializeOrder(order) });
 });
 
 export const updateOrderStatus = asyncHandler(async (request: Request, response: Response) => {
@@ -354,5 +360,5 @@ export const updateOrderStatus = asyncHandler(async (request: Request, response:
     }
   });
 
-  return response.json({ data: updatedOrder });
+  return response.json({ data: serializeOrder({ ...updatedOrder, items: [] }) });
 });

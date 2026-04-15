@@ -1,5 +1,5 @@
 import { Search } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { createCategory, createProduct, fetchAdminCategories, fetchAdminProducts } from "../../api/catalog";
 import { fetchStockAlerts } from "../../api/stock";
 import { Button } from "../../components/Button";
@@ -10,7 +10,7 @@ import { SectionHeading } from "../../components/SectionHeading";
 import { SkeletonCard } from "../../components/SkeletonCard";
 import { useToast } from "../../hooks/useToast";
 import type { Category, Product, StockAlertsResponse } from "../../types";
-import { formatCurrency } from "../../utils/currency";
+import { formatCurrency, parseOptionalNumberInput } from "../../utils/currency";
 
 export function AdminProductsPage() {
   const [loading, setLoading] = useState(true);
@@ -19,7 +19,6 @@ export function AdminProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [stockAlerts, setStockAlerts] = useState<StockAlertsResponse | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState("");
   const [selectedCategoryId, setSelectedCategoryId] = useState("all");
   const [categoryName, setCategoryName] = useState("");
   const [productForm, setProductForm] = useState({
@@ -32,6 +31,7 @@ export function AdminProductsPage() {
     stockQuantity: "20"
   });
   const { showToast } = useToast();
+  const deferredSearchTerm = useDeferredValue(searchTerm.trim().toLowerCase());
 
   async function loadCatalog() {
     setLoading(true);
@@ -72,14 +72,6 @@ export function AdminProductsPage() {
     void loadCatalog();
   }, []);
 
-  useEffect(() => {
-    const timeout = window.setTimeout(() => {
-      setDebouncedSearchTerm(searchTerm.trim().toLowerCase());
-    }, 250);
-
-    return () => window.clearTimeout(timeout);
-  }, [searchTerm]);
-
   async function handleCreateCategory() {
     if (!categoryName) {
       return;
@@ -114,11 +106,22 @@ export function AdminProductsPage() {
     }
 
     try {
+      const parsedPrice = parseOptionalNumberInput(productForm.price);
+      const parsedCostPrice = parseOptionalNumberInput(productForm.costPrice);
+      const parsedStockQuantity = parseOptionalNumberInput(productForm.stockQuantity);
+
+      if (parsedPrice == null) {
+        throw new Error("Informe um preco valido.");
+      }
+
       const product = await createProduct({
-        ...productForm,
-        price: Number(productForm.price),
-        costPrice: Number(productForm.costPrice || 0),
-        stockQuantity: Number(productForm.stockQuantity || 0),
+        categoryId: productForm.categoryId,
+        name: productForm.name.trim(),
+        description: productForm.description.trim(),
+        imageUrl: productForm.imageUrl.trim() || null,
+        price: parsedPrice,
+        costPrice: parsedCostPrice,
+        stockQuantity: parsedStockQuantity ?? 0,
         tags: []
       });
 
@@ -150,10 +153,10 @@ export function AdminProductsPage() {
     return products.filter((product) => {
       const matchesCategory = selectedCategoryId === "all" ? true : product.categoryId === selectedCategoryId;
       const haystack = `${product.name} ${product.description} ${product.category?.name ?? ""}`.toLowerCase();
-      const matchesSearch = debouncedSearchTerm ? haystack.includes(debouncedSearchTerm) : true;
+      const matchesSearch = deferredSearchTerm ? haystack.includes(deferredSearchTerm) : true;
       return matchesCategory && matchesSearch;
     });
-  }, [debouncedSearchTerm, products, selectedCategoryId]);
+  }, [deferredSearchTerm, products, selectedCategoryId]);
 
   return (
     <div className="space-y-6">

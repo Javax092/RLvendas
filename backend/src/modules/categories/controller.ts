@@ -3,6 +3,27 @@ import { prisma } from "../../lib/prisma.js";
 import { ApiError } from "../../utils/api-error.js";
 import { asyncHandler } from "../../utils/async-handler.js";
 import { slugify } from "../../utils/slug.js";
+
+function normalizeSlug(slug: string) {
+  return slug.toLowerCase().replace(/burguer/g, "burger").replace(/[^a-z0-9]/g, "");
+}
+
+async function findRestaurantIdByPublicSlug(slug: string) {
+  const exactMatch = await prisma.restaurant.findUnique({
+    where: { slug },
+    select: { id: true, slug: true },
+  });
+
+  if (exactMatch) {
+    return exactMatch.id;
+  }
+
+  const restaurants = await prisma.restaurant.findMany({
+    select: { id: true, slug: true },
+  });
+
+  return restaurants.find((restaurant) => normalizeSlug(restaurant.slug) === normalizeSlug(slug))?.id ?? null;
+}
 import { createCategorySchema, updateCategorySchema } from "./schema.js";
 
 export const createCategory = asyncHandler(async (request: Request, response: Response) => {
@@ -83,19 +104,15 @@ export const deleteCategory = asyncHandler(async (request: Request, response: Re
 
 export const listPublicCategories = asyncHandler(async (request: Request, response: Response) => {
   const slug = String(request.params.slug);
-  const restaurant = await prisma.restaurant.findUnique({
-    where: {
-      slug
-    }
-  });
+  const restaurantId = await findRestaurantIdByPublicSlug(slug);
 
-  if (!restaurant) {
+  if (!restaurantId) {
     throw new ApiError(404, "Restaurante nao encontrado.");
   }
 
   const categories = await prisma.category.findMany({
     where: {
-      restaurantId: restaurant.id,
+      restaurantId,
       isActive: true
     },
     orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }]

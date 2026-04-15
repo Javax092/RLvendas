@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import { prisma } from "../../lib/prisma.js";
 import { ApiError } from "../../utils/api-error.js";
 import { asyncHandler } from "../../utils/async-handler.js";
+import { serializeRestaurant, serializeRestaurantSettings } from "../../utils/serializers.js";
 import { updateRestaurantSchema, updateSettingsSchema } from "./schema.js";
 
 function normalizeSlug(slug: string) {
@@ -11,19 +12,7 @@ function normalizeSlug(slug: string) {
 async function findRestaurantByPublicSlug(slug: string) {
   const exactMatch = await prisma.restaurant.findUnique({
     where: { slug },
-    include: {
-      settings: true,
-      categories: {
-        where: { isActive: true },
-        orderBy: { sortOrder: "asc" },
-        include: {
-          products: {
-            where: { isActive: true },
-            orderBy: { createdAt: "asc" }
-          }
-        }
-      }
-    }
+    select: { id: true }
   });
 
   if (exactMatch) {
@@ -32,22 +21,75 @@ async function findRestaurantByPublicSlug(slug: string) {
 
   const normalizedSlug = normalizeSlug(slug);
   const restaurants = await prisma.restaurant.findMany({
-    include: {
-      settings: true,
+    select: {
+      id: true,
+      slug: true
+    }
+  });
+
+  return restaurants.find((restaurant) => normalizeSlug(restaurant.slug) === normalizedSlug) ?? null;
+}
+
+async function getPublicRestaurantPayloadById(restaurantId: string) {
+  return prisma.restaurant.findUnique({
+    where: { id: restaurantId },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      description: true,
+      logoUrl: true,
+      primaryColor: true,
+      secondaryColor: true,
+      whatsappNumber: true,
+      plan: true,
+      isAiUpsellOn: true,
+      settings: {
+        select: {
+          heroTitle: true,
+          heroSubtitle: true,
+          seoTitle: true,
+          seoDescription: true,
+          bannerUrl: true,
+          deliveryFee: true,
+          minimumOrderAmount: true,
+          estimatedTimeMin: true,
+          estimatedTimeMax: true
+        }
+      },
       categories: {
         where: { isActive: true },
         orderBy: { sortOrder: "asc" },
-        include: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          description: true,
+          sortOrder: true,
+          isActive: true,
           products: {
             where: { isActive: true },
-            orderBy: { createdAt: "asc" }
+            orderBy: [{ isFeatured: "desc" }, { createdAt: "asc" }],
+            select: {
+              id: true,
+              categoryId: true,
+              name: true,
+              description: true,
+              imageUrl: true,
+              price: true,
+              costPrice: true,
+              compareAtPrice: true,
+              stockQuantity: true,
+              isActive: true,
+              isFeatured: true,
+              productType: true,
+              tags: true
+            }
           }
         }
       }
     }
   });
-
-  return restaurants.find((restaurant) => normalizeSlug(restaurant.slug) === normalizedSlug) ?? null;
 }
 
 export const getMyRestaurant = asyncHandler(async (request: Request, response: Response) => {
@@ -62,7 +104,12 @@ export const getMyRestaurant = asyncHandler(async (request: Request, response: R
     throw new ApiError(404, "Restaurante nao encontrado.");
   }
 
-  return response.json({ data: restaurant });
+  return response.json({
+    data: {
+      ...restaurant,
+      settings: serializeRestaurantSettings(restaurant.settings),
+    },
+  });
 });
 
 export const updateMyRestaurant = asyncHandler(async (request: Request, response: Response) => {
@@ -85,10 +132,18 @@ export const updateMyRestaurant = asyncHandler(async (request: Request, response
 
   const restaurant = await prisma.restaurant.update({
     where: { id: request.user!.restaurantId },
-    data
+    data,
+    include: {
+      settings: true,
+    },
   });
 
-  return response.json({ data: restaurant });
+  return response.json({
+    data: {
+      ...restaurant,
+      settings: serializeRestaurantSettings(restaurant.settings),
+    },
+  });
 });
 
 export const getMySettings = asyncHandler(async (request: Request, response: Response) => {
@@ -102,7 +157,7 @@ export const getMySettings = asyncHandler(async (request: Request, response: Res
     throw new ApiError(404, "Configuracoes do restaurante nao encontradas.");
   }
 
-  return response.json({ data: settings });
+  return response.json({ data: serializeRestaurantSettings(settings) });
 });
 
 export const updateMySettings = asyncHandler(async (request: Request, response: Response) => {
@@ -119,29 +174,43 @@ export const updateMySettings = asyncHandler(async (request: Request, response: 
     }
   });
 
-  return response.json({ data: settings });
+  return response.json({ data: serializeRestaurantSettings(settings) });
 });
 
 export const getPublicRestaurant = asyncHandler(async (request: Request, response: Response) => {
   const slug = String(request.params.slug);
-  const restaurant = await findRestaurantByPublicSlug(slug);
+  const restaurantRef = await findRestaurantByPublicSlug(slug);
+
+  if (!restaurantRef) {
+    throw new ApiError(404, "Restaurante nao encontrado.");
+  }
+
+  const restaurant = await getPublicRestaurantPayloadById(restaurantRef.id);
 
   if (!restaurant) {
     throw new ApiError(404, "Restaurante nao encontrado.");
   }
 
-  return response.json({ data: restaurant });
+  return response.json({ data: serializeRestaurant(restaurant) });
 });
 
 export const getPublicMenu = asyncHandler(async (request: Request, response: Response) => {
   const slug = String(request.params.slug);
-  const restaurant = await findRestaurantByPublicSlug(slug);
+  const restaurantRef = await findRestaurantByPublicSlug(slug);
+
+  if (!restaurantRef) {
+    throw new ApiError(404, "Restaurante nao encontrado.");
+  }
+
+  const restaurant = await getPublicRestaurantPayloadById(restaurantRef.id);
 
   if (!restaurant) {
     throw new ApiError(404, "Restaurante nao encontrado.");
   }
 
+  response.setHeader("Cache-Control", "public, max-age=60, s-maxage=300, stale-while-revalidate=600");
+
   return response.json({
-    data: restaurant
+    data: serializeRestaurant(restaurant)
   });
 });
