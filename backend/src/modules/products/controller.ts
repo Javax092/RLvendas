@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { prisma } from "../../lib/prisma.js";
+import { enrichProductsWithPromotions } from "../../services/promotion-engine.js";
 import { ApiError } from "../../utils/api-error.js";
 import { asyncHandler } from "../../utils/async-handler.js";
 import { toDecimalString } from "../../utils/money.js";
@@ -68,10 +69,11 @@ export const createProduct = asyncHandler(async (request: Request, response: Res
 });
 
 export const listProducts = asyncHandler(async (request: Request, response: Response) => {
+  const restaurantId = request.user!.restaurantId;
   const categoryId = typeof request.query.categoryId === "string" ? request.query.categoryId : undefined;
   const products = await prisma.product.findMany({
     where: {
-      restaurantId: request.user!.restaurantId,
+      restaurantId,
       categoryId
     },
     include: {
@@ -80,7 +82,9 @@ export const listProducts = asyncHandler(async (request: Request, response: Resp
     orderBy: [{ isFeatured: "desc" }, { createdAt: "desc" }]
   });
 
-  return response.json({ data: products.map(serializeProduct) });
+  const productsWithPromotions = await enrichProductsWithPromotions(restaurantId, products);
+
+  return response.json({ data: productsWithPromotions.map(serializeProduct) });
 });
 
 export const getProduct = asyncHandler(async (request: Request, response: Response) => {

@@ -3,7 +3,10 @@ import { normalizeCurrencyValue, normalizeNumber } from "./currency";
 
 export function calculateCartTotal(items: CartItem[]) {
   return items.reduce(
-    (sum, item) => sum + normalizeCurrencyValue(item.product.price) * normalizeNumber(item.quantity, 0),
+    (sum, item) =>
+      sum +
+      normalizeCurrencyValue(item.product.promotionalPrice ?? item.product.price) *
+        normalizeNumber(item.quantity, 0),
     0,
   );
 }

@@ -7,3 +7,18 @@ export async function fetchPromotions() {
   const payload = unwrapData<{ promotions: Promotion[] }>(data);
   return (payload.promotions ?? []).map(normalizePromotion);
 }
+
+export async function createPromotion(payload: Record<string, unknown>) {
+  const { data } = await api.post("/promotions", payload);
+  return normalizePromotion(unwrapData<{ promotion: Promotion }>(data).promotion);
+}
+
+export async function updatePromotion(promotionId: string, payload: Record<string, unknown>) {
+  const { data } = await api.put(`/promotions/${promotionId}`, payload);
+  return normalizePromotion(unwrapData<{ promotion: Promotion }>(data).promotion);
+}
+
+export async function deletePromotion(promotionId: string) {
+  const { data } = await api.delete(`/promotions/${promotionId}`);
+  return unwrapData<{ deleted: boolean }>(data);
+}

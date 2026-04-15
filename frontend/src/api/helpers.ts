@@ -2,6 +2,7 @@ import { AxiosError } from "axios";
 import { normalizeCurrencyValue, normalizeNumber } from "../utils/currency";
 import type {
   ApiCategory,
+  ApiPromotion,
   ApiProduct,
   ApiPublicMenuResponse,
   ApiRestaurantSettings,
@@ -131,6 +132,8 @@ export function normalizeProduct(raw: ApiProduct | any): Product {
     isFeatured: Boolean(raw?.isFeatured ?? false),
     productType: raw?.productType ?? "SINGLE",
     tags: Array.isArray(raw?.tags) ? raw.tags.map((tag: unknown) => String(tag)) : [],
+    promotionalPrice: raw?.promotionalPrice == null ? null : normalizeCurrencyValue(raw?.promotionalPrice),
+    promotion: raw?.promotion ? normalizePromotion(raw.promotion) : null,
     category: raw?.category ? normalizeCategory(raw.category) : undefined
   };
 }
@@ -240,6 +243,7 @@ export function normalizeOrder(raw: any): Order {
     customerName: toStringValue(raw?.customerName, "Cliente nao identificado"),
     customerPhone: raw?.customerPhone ?? null,
     customerAddress: raw?.customerAddress ?? null,
+    fulfillmentType: raw?.fulfillmentType ?? "DELIVERY",
     paymentMethod: toStringValue(raw?.paymentMethod, "Nao informado"),
     notes: raw?.notes ?? null,
     subtotal: normalizeCurrencyValue(raw?.subtotal),
@@ -420,7 +424,7 @@ export function normalizeLoyalty(raw: any): LoyaltySummary {
   };
 }
 
-export function normalizePromotion(raw: any): Promotion {
+export function normalizePromotion(raw: ApiPromotion | any): Promotion {
   return {
     id: toStringValue(raw?.id),
     title: toStringValue(raw?.title, "Promocao"),
@@ -428,8 +432,15 @@ export function normalizePromotion(raw: any): Promotion {
     value: toNumber(raw?.value),
     active: Boolean(raw?.active ?? true),
     description: raw?.description ?? null,
+    categoryId: raw?.categoryId ?? null,
+    categoryName: raw?.categoryName ?? null,
     productId: raw?.productId ?? null,
     productName: raw?.productName ?? null,
-    originalPrice: raw?.originalPrice == null ? undefined : normalizeCurrencyValue(raw?.originalPrice)
+    minimumOrderAmount: raw?.minimumOrderAmount == null ? null : normalizeCurrencyValue(raw?.minimumOrderAmount),
+    highlightLabel: raw?.highlightLabel ?? null,
+    startsAt: raw?.startsAt ?? null,
+    endsAt: raw?.endsAt ?? null,
+    originalPrice: raw?.originalPrice == null ? null : normalizeCurrencyValue(raw?.originalPrice),
+    promotionalPrice: raw?.promotionalPrice == null ? null : normalizeCurrencyValue(raw?.promotionalPrice)
   };
 }

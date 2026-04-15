@@ -57,6 +57,8 @@ type SerializableProduct = {
   productType: string;
   tags?: string[];
   category?: SerializableCategory | null;
+  promotionalPrice?: NumericValue | null;
+  promotion?: SerializablePromotion | null;
 };
 
 type SerializableCategoryWithProducts = SerializableCategory & {
@@ -122,6 +124,7 @@ type SerializableOrder = {
   customerName: string;
   customerPhone?: string | null;
   customerAddress?: string | null;
+  fulfillmentType?: string | null;
   paymentMethod: string;
   notes?: string | null;
   subtotal: NumericValue;
@@ -132,6 +135,25 @@ type SerializableOrder = {
   status: string;
   createdAt: Date;
   items?: SerializableOrderItem[];
+};
+
+type SerializablePromotion = {
+  id: string;
+  title: string;
+  type: string;
+  value: NumericValue;
+  active: boolean;
+  description?: string | null;
+  productId?: string | null;
+  categoryId?: string | null;
+  productName?: string | null;
+  categoryName?: string | null;
+  minimumOrderAmount?: NumericValue | null;
+  highlightLabel?: string | null;
+  startsAt?: Date | string | null;
+  endsAt?: Date | string | null;
+  originalPrice?: NumericValue | null;
+  promotionalPrice?: NumericValue | null;
 };
 
 export function serializeCategory(category: SerializableCategory) {
@@ -160,7 +182,31 @@ export function serializeProduct(product: SerializableProduct) {
     isFeatured: product.isFeatured,
     productType: product.productType,
     tags: Array.isArray(product.tags) ? product.tags : [],
+    promotionalPrice: product.promotionalPrice == null ? null : toPlainNumber(product.promotionalPrice),
+    promotion: product.promotion ? serializePromotion(product.promotion) : null,
     category: product.category ? serializeCategory(product.category) : undefined,
+  };
+}
+
+export function serializePromotion(promotion: SerializablePromotion) {
+  return {
+    id: promotion.id,
+    title: promotion.title,
+    type: promotion.type,
+    value: toPlainNumber(promotion.value),
+    active: Boolean(promotion.active),
+    description: promotion.description ?? null,
+    productId: promotion.productId ?? null,
+    categoryId: promotion.categoryId ?? null,
+    productName: promotion.productName ?? null,
+    categoryName: promotion.categoryName ?? null,
+    minimumOrderAmount:
+      promotion.minimumOrderAmount == null ? null : toPlainNumber(promotion.minimumOrderAmount),
+    highlightLabel: promotion.highlightLabel ?? null,
+    startsAt: promotion.startsAt ? new Date(promotion.startsAt).toISOString() : null,
+    endsAt: promotion.endsAt ? new Date(promotion.endsAt).toISOString() : null,
+    originalPrice: promotion.originalPrice == null ? null : toPlainNumber(promotion.originalPrice),
+    promotionalPrice: promotion.promotionalPrice == null ? null : toPlainNumber(promotion.promotionalPrice),
   };
 }
 
@@ -219,6 +265,7 @@ export function serializeOrder(order: SerializableOrder) {
     customerName: order.customerName,
     customerPhone: order.customerPhone ?? null,
     customerAddress: order.customerAddress ?? null,
+    fulfillmentType: order.fulfillmentType ?? "DELIVERY",
     paymentMethod: order.paymentMethod,
     notes: order.notes ?? null,
     subtotal: toPlainNumber(order.subtotal),

@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { prisma } from "../../lib/prisma.js";
+import { enrichProductsWithPromotions } from "../../services/promotion-engine.js";
 import { ApiError } from "../../utils/api-error.js";
 import { asyncHandler } from "../../utils/async-handler.js";
 import { serializeRestaurant, serializeRestaurantSettings } from "../../utils/serializers.js";
@@ -31,7 +32,7 @@ async function findRestaurantByPublicSlug(slug: string) {
 }
 
 async function getPublicRestaurantPayloadById(restaurantId: string) {
-  return prisma.restaurant.findUnique({
+  const restaurant = await prisma.restaurant.findUnique({
     where: { id: restaurantId },
     select: {
       id: true,
@@ -90,6 +91,22 @@ async function getPublicRestaurantPayloadById(restaurantId: string) {
       }
     }
   });
+
+  if (!restaurant) {
+    return null;
+  }
+
+  const promotedCategories = await Promise.all(
+    restaurant.categories.map(async (category) => ({
+      ...category,
+      products: await enrichProductsWithPromotions(restaurantId, category.products),
+    })),
+  );
+
+  return {
+    ...restaurant,
+    categories: promotedCategories,
+  };
 }
 
 export const getMyRestaurant = asyncHandler(async (request: Request, response: Response) => {

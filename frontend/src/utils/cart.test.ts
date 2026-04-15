@@ -57,3 +57,25 @@ test("calculateCartCount sums quantities defensively", () => {
 
   assert.equal(count, 3);
 });
+
+test("calculateCartTotal uses promotional price when available", () => {
+  const total = calculateCartTotal([
+    {
+      product: {
+        id: "p1",
+        categoryId: "c1",
+        name: "Burger",
+        description: "Classic",
+        price: 30,
+        promotionalPrice: 25,
+        isActive: true,
+        isFeatured: false,
+        productType: "SINGLE",
+        tags: [],
+      },
+      quantity: 2,
+    },
+  ]);
+
+  assert.equal(total, 50);
+});

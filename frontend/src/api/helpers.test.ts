@@ -21,11 +21,21 @@ test("normalizeProduct converts decimal-like strings into safe numbers", () => {
     isFeatured: false,
     productType: "SINGLE",
     tags: ["featured"],
+    promotionalPrice: "20.90",
+    promotion: {
+      id: "promo-1",
+      title: "Desconto",
+      type: "percentage",
+      value: "10",
+      active: true
+    }
   });
 
   assert.equal(product.price, 24.9);
   assert.equal(product.costPrice, 10.25);
   assert.equal(product.stockQuantity, 5);
+  assert.equal(product.promotionalPrice, 20.9);
+  assert.equal(product.promotion?.title, "Desconto");
 });
 
 test("normalizePublicMenuResponse normalizes nested categories and products", () => {

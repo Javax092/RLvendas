@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { toDecimalString, toSafeNumber } from "../src/utils/money.js";
 import { serializeOrder, serializeProduct, serializeRestaurant } from "../src/utils/serializers.js";
+import { resolveOrderItemPrice } from "../src/services/promotion-engine.js";
 
 test("toSafeNumber and toDecimalString normalize numeric input", () => {
   assert.equal(toSafeNumber("19.90"), 19.9);
@@ -124,4 +125,60 @@ test("serializeOrder normalizes totals and nested product values", () => {
   assert.equal(order.total, 25);
   assert.equal(order.items[0]?.product.price, 25);
   assert.equal(order.items[0]?.totalPrice, 25);
+});
+
+test("resolveOrderItemPrice applies the best active promotion without mutating base price", () => {
+  const result = resolveOrderItemPrice(
+    {
+      id: "p1",
+      categoryId: "c1",
+      name: "Burger",
+      description: "Classic",
+      imageUrl: null,
+      price: "30.00" as never,
+      costPrice: null,
+      compareAtPrice: null,
+      stockQuantity: 10,
+      isActive: true,
+      isFeatured: false,
+      productType: "SINGLE",
+      tags: [],
+    },
+    [
+      {
+        id: "promo-1",
+        title: "10% off",
+        type: "percentage",
+        value: "10.00" as never,
+        active: true,
+        description: null,
+        productId: "p1",
+        categoryId: null,
+        minimumOrderAmount: null,
+        highlightLabel: null,
+        startsAt: null,
+        endsAt: null,
+        deletedAt: null,
+      },
+      {
+        id: "promo-2",
+        title: "R$ 5 off",
+        type: "fixed",
+        value: "5.00" as never,
+        active: true,
+        description: null,
+        productId: "p1",
+        categoryId: null,
+        minimumOrderAmount: null,
+        highlightLabel: null,
+        startsAt: null,
+        endsAt: null,
+        deletedAt: null,
+      },
+    ],
+    { subtotal: 30 },
+  );
+
+  assert.equal(result.basePrice, 30);
+  assert.equal(result.unitPrice, 25);
 });

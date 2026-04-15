@@ -15,6 +15,8 @@ export type ApiProduct = {
   productType: "SINGLE" | "COMBO" | "ADDON";
   tags: string[];
   category?: ApiCategory;
+  promotionalPrice?: ApiMoneyValue;
+  promotion?: ApiPromotion | null;
 };
 
 export type ApiCategory = {
@@ -54,6 +56,25 @@ export type ApiRestaurant = {
   categories?: ApiCategory[];
 };
 
+export type ApiPromotion = {
+  id: string;
+  title: string;
+  type: string;
+  value: ApiMoneyValue;
+  active: boolean;
+  description?: string | null;
+  productId?: string | null;
+  categoryId?: string | null;
+  productName?: string | null;
+  categoryName?: string | null;
+  minimumOrderAmount?: ApiMoneyValue;
+  highlightLabel?: string | null;
+  startsAt?: string | null;
+  endsAt?: string | null;
+  originalPrice?: ApiMoneyValue;
+  promotionalPrice?: ApiMoneyValue;
+};
+
 export type Product = {
   id: string;
   categoryId: string;
@@ -69,6 +90,8 @@ export type Product = {
   productType: "SINGLE" | "COMBO" | "ADDON";
   tags: string[];
   category?: Category;
+  promotionalPrice?: number | null;
+  promotion?: Promotion | null;
 };
 
 export type Category = {
@@ -122,6 +145,7 @@ export type Order = {
   customerName: string;
   customerPhone?: string | null;
   customerAddress?: string | null;
+  fulfillmentType?: string | null;
   paymentMethod: string;
   notes?: string | null;
   subtotal: number;
@@ -314,7 +338,14 @@ export type Promotion = {
   value: number;
   active: boolean;
   description?: string | null;
+  categoryId?: string | null;
+  categoryName?: string | null;
   productId?: string | null;
   productName?: string | null;
-  originalPrice?: number;
+  minimumOrderAmount?: number | null;
+  highlightLabel?: string | null;
+  startsAt?: string | null;
+  endsAt?: string | null;
+  originalPrice?: number | null;
+  promotionalPrice?: number | null;
 };

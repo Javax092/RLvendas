@@ -57,6 +57,8 @@ export function PublicMenuPage() {
       addItem(product);
     }
   }, [addItem, flattenedProducts]);
+  const deliveryFee = restaurant?.settings?.deliveryFee ?? 0;
+  const minimumOrderAmount = restaurant?.settings?.minimumOrderAmount ?? 0;
 
   return (
     <div className="min-h-screen bg-hero-pattern text-white">
@@ -133,7 +135,9 @@ export function PublicMenuPage() {
                       </div>
                       <h3 className="mt-3 text-lg font-bold text-white">{product.name}</h3>
                       <p className="mt-2 text-sm text-slate-300">{product.description}</p>
-                      <p className="mt-3 text-sm font-semibold text-white">A partir de {formatCurrency(product.price)}</p>
+                      <p className="mt-3 text-sm font-semibold text-white">
+                        A partir de {formatCurrency(product.promotionalPrice ?? product.price)}
+                      </p>
                     </button>
                   ))}
                 </div>
@@ -184,6 +188,8 @@ export function PublicMenuPage() {
               restaurantSlug={restaurantSlug}
               upsellEnabled={restaurant?.isAiUpsellOn || false}
               onAddSuggested={handleAddSuggested}
+              deliveryFee={deliveryFee}
+              minimumOrderAmount={minimumOrderAmount}
             />
           </div>
         </section>
@@ -197,6 +203,8 @@ export function PublicMenuPage() {
             restaurantSlug={restaurantSlug}
             upsellEnabled={restaurant?.isAiUpsellOn || false}
             onAddSuggested={handleAddSuggested}
+            deliveryFee={deliveryFee}
+            minimumOrderAmount={minimumOrderAmount}
             isOpen={mobileCartOpen}
             onClose={() => setMobileCartOpen(false)}
           />

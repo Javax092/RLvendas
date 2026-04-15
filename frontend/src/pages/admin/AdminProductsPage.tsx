@@ -21,6 +21,7 @@ export function AdminProductsPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategoryId, setSelectedCategoryId] = useState("all");
   const [categoryName, setCategoryName] = useState("");
+  const [creatingCategory, setCreatingCategory] = useState(false);
   const [productForm, setProductForm] = useState({
     categoryId: "",
     name: "",
@@ -73,19 +74,22 @@ export function AdminProductsPage() {
   }, []);
 
   async function handleCreateCategory() {
-    if (!categoryName) {
+    const normalizedName = categoryName.trim();
+    if (!normalizedName || creatingCategory) {
       return;
     }
 
     try {
+      setCreatingCategory(true);
       const category = await createCategory({
-        name: categoryName,
+        name: normalizedName,
         sortOrder: categories.length + 1,
         isActive: true
       });
 
-      setCategories((current) => [...current, category]);
+      setCategories((current) => [...current, category].sort((left, right) => left.sortOrder - right.sortOrder));
       setCategoryName("");
+      setProductForm((current) => ({ ...current, categoryId: current.categoryId || category.id }));
       showToast({
         type: "success",
         title: "Categoria criada",
@@ -97,6 +101,8 @@ export function AdminProductsPage() {
         title: "Falha ao criar categoria",
         description: requestError instanceof Error ? requestError.message : "Tente novamente."
       });
+    } finally {
+      setCreatingCategory(false);
     }
   }
 
@@ -177,7 +183,9 @@ export function AdminProductsPage() {
         <div className="space-y-4 rounded-[28px] border border-white/10 bg-white/5 p-5">
           <h3 className="text-lg font-bold text-white">Nova categoria</h3>
           <Input placeholder="Ex.: Sobremesas" value={categoryName} onChange={(event) => setCategoryName(event.target.value)} />
-          <Button onClick={handleCreateCategory}>Criar categoria</Button>
+          <Button onClick={handleCreateCategory} disabled={creatingCategory || !categoryName.trim()}>
+            {creatingCategory ? "Criando..." : "Criar categoria"}
+          </Button>
 
           <div className="space-y-3 pt-4">
             {categories.map((category) => (

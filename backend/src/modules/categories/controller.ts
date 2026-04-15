@@ -29,6 +29,32 @@ import { createCategorySchema, updateCategorySchema } from "./schema.js";
 export const createCategory = asyncHandler(async (request: Request, response: Response) => {
   const body = createCategorySchema.parse(request.body);
   const slug = body.slug ?? slugify(body.name);
+  const existing = await prisma.category.findFirst({
+    where: {
+      restaurantId: request.user!.restaurantId,
+      OR: [
+        { slug },
+        {
+          name: {
+            equals: body.name,
+            mode: "insensitive",
+          },
+        },
+      ],
+    },
+  });
+
+  if (existing) {
+    throw new ApiError(409, "Ja existe uma categoria com esse nome neste restaurante.");
+  }
+
+  const sortOrder =
+    body.sortOrder ??
+    ((await prisma.category.aggregate({
+      where: { restaurantId: request.user!.restaurantId },
+      _max: { sortOrder: true },
+    }))._max.sortOrder ?? -1) +
+      1;
 
   const category = await prisma.category.create({
     data: {
@@ -36,7 +62,7 @@ export const createCategory = asyncHandler(async (request: Request, response: Re
       name: body.name,
       slug,
       description: body.description,
-      sortOrder: body.sortOrder ?? 0,
+      sortOrder,
       isActive: body.isActive ?? true
     }
   });

@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { prisma } from "../../lib/prisma.js";
+import { getRestaurantPromotions, resolveOrderItemPrice } from "../../services/promotion-engine.js";
 import { suggestUpsell } from "../../services/upsell.js";
 import { ApiError } from "../../utils/api-error.js";
 import { asyncHandler } from "../../utils/async-handler.js";
@@ -43,6 +44,7 @@ async function findRestaurantByPublicSlug(slug: string) {
 }
 
 export const createPublicOrder = asyncHandler(async (request: Request, response: Response) => {
+  const hasExplicitFulfillmentType = typeof request.body?.fulfillmentType === "string";
   const body = createOrderSchema.parse(request.body);
   const slug = String(request.params.slug);
 
@@ -65,7 +67,17 @@ export const createPublicOrder = asyncHandler(async (request: Request, response:
     throw new ApiError(400, "Um ou mais produtos sao invalidos para este restaurante.");
   }
 
+  const fulfillmentType = body.fulfillmentType ?? "DELIVERY";
+  if (hasExplicitFulfillmentType && fulfillmentType === "DELIVERY" && !body.customerAddress?.trim()) {
+    throw new ApiError(400, "Informe o endereco para entrega.");
+  }
+
   const productMap = new Map(products.map((product) => [product.id, product]));
+  const promotions = await getRestaurantPromotions(restaurant.id);
+  const baseSubtotal = body.items.reduce((sum, item) => {
+    const product = productMap.get(item.productId);
+    return sum + toSafeNumber(product?.price ?? 0) * item.quantity;
+  }, 0);
   const orderItems = body.items.map((item) => {
     const product = productMap.get(item.productId);
 
@@ -73,7 +85,7 @@ export const createPublicOrder = asyncHandler(async (request: Request, response:
       throw new ApiError(400, "Produto invalido no pedido.");
     }
 
-    const unitPrice = toSafeNumber(product.price);
+    const { unitPrice } = resolveOrderItemPrice(product, promotions, { subtotal: baseSubtotal });
     return {
       productId: product.id,
       name: product.name,
@@ -90,7 +102,7 @@ export const createPublicOrder = asyncHandler(async (request: Request, response:
       restaurantId: restaurant.id
     }
   });
-  const deliveryFee = toSafeNumber(settings?.deliveryFee ?? 0);
+  const deliveryFee = fulfillmentType === "PICKUP" ? 0 : toSafeNumber(settings?.deliveryFee ?? 0);
   const minimumOrderAmount = toSafeNumber(settings?.minimumOrderAmount ?? 0);
 
   if (subtotal < minimumOrderAmount) {
@@ -111,6 +123,7 @@ export const createPublicOrder = asyncHandler(async (request: Request, response:
     customerName: body.customerName,
     customerPhone: body.customerPhone,
     customerAddress: body.customerAddress,
+    fulfillmentType,
     items: orderItems.map((item) => ({
       name: item.name,
       quantity: item.quantity,
@@ -160,6 +173,7 @@ export const createPublicOrder = asyncHandler(async (request: Request, response:
         customerName: body.customerName,
         customerPhone: body.customerPhone,
         customerAddress: body.customerAddress,
+        fulfillmentType,
         paymentMethod: body.paymentMethod,
         notes: body.notes,
         subtotal: toDecimalString(subtotal),
@@ -238,6 +252,7 @@ export const createPublicOrder = asyncHandler(async (request: Request, response:
       id: order.id,
       total,
       status: order.status,
+      fulfillmentType,
       whatsappMessage,
       whatsappUrl
     }

@@ -1,0 +1,11 @@
+ALTER TABLE "Order"
+ADD COLUMN "fulfillmentType" TEXT NOT NULL DEFAULT 'DELIVERY';
+
+ALTER TABLE "Promotion"
+ADD COLUMN "productId" TEXT,
+ADD COLUMN "categoryId" TEXT,
+ADD COLUMN "minimumOrderAmount" DECIMAL(10,2),
+ADD COLUMN "highlightLabel" TEXT,
+ADD COLUMN "startsAt" TIMESTAMP(3),
+ADD COLUMN "endsAt" TIMESTAMP(3),
+ADD COLUMN "deletedAt" TIMESTAMP(3);

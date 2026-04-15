@@ -6,9 +6,11 @@ type WhatsAppItem = {
 };
 
 type WhatsAppPayload = {
+  restaurantName?: string | null;
   customerName: string;
   customerPhone?: string | null;
   customerAddress?: string | null;
+  fulfillmentType?: string | null;
   items: WhatsAppItem[];
   subtotal: number;
   deliveryFee: number;
@@ -26,26 +28,22 @@ export function formatCurrency(value: number) {
 
 export function buildWhatsAppMessage(payload: WhatsAppPayload) {
   const itemLines = payload.items.map((item) => {
-    const noteSuffix = item.notes ? ` (${item.notes})` : "";
-    return `- ${item.quantity}x ${item.name} — ${formatCurrency(item.totalPrice)}${noteSuffix}`;
+    return `- ${item.name} x${item.quantity} - ${formatCurrency(item.totalPrice)}`;
   });
 
   const lines = [
-    "Ola! Quero fazer um pedido:",
-    "",
-    `Cliente: ${payload.customerName}`,
-    `Telefone: ${payload.customerPhone ?? "-"}`,
-    `Endereco: ${payload.customerAddress ?? "-"}`,
+    `🍔 Pedido - ${payload.restaurantName || "Don Burguer"}`,
     "",
     "Itens:",
     ...itemLines,
     "",
-    `Subtotal: ${formatCurrency(payload.subtotal)}`,
-    `Entrega: ${formatCurrency(payload.deliveryFee)}`,
     `Total: ${formatCurrency(payload.total)}`,
     "",
+    `Entrega: ${payload.fulfillmentType === "PICKUP" ? "Retirada no local" : "Entrega"}`,
     `Pagamento: ${payload.paymentMethod}`,
-    `Observacoes: ${payload.notes ?? "-"}`
+    `Endereco: ${payload.customerAddress || "Retirada no local"}`,
+    "",
+    `Observacoes: ${payload.notes || "Sem observacoes"}`
   ];
 
   return lines.join("\n");
